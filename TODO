@@ -1,0 +1,2 @@
+add_filter() for MIME types? (probably not...)
+crashes on fltk_dirtree: test on newer FLTK version?
