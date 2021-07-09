@@ -53,9 +53,9 @@ public:
 
   bool operator() (const char *ap, const char *bp)
   {
-    // skip first byte
-    ap++;
-    bp++;
+    // skip first byte if it's '/' (directory item)
+    if (*ap == '/') ap++;
+    if (*bp == '/') bp++;
 
     if (isdigit(*ap) && isdigit(*bp)) {
       // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
@@ -70,8 +70,8 @@ public:
 
     // ignore leading dots in filenames ("bin, .config, data, .local"
     // instead of ".config, .local, bin, data")
-    if (*ap == '.') { ap++; }
-    if (*bp == '.') { bp++; }
+    if (*ap == '.') ap++;
+    if (*bp == '.') bp++;
 
     // Alphabetic sort
     return reverse_ ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
@@ -325,18 +325,21 @@ bool fltk_dirtree::load_directory(const char *path)
   }
   p = s;
 
+  //printf("%s\n", s);
   open(root());
 
   while (*++p) {
-    if (*p == '/') {
-      *p = 0;
-
-      if (!open(s)) {
-        free(s);
-        return false;
-      }
-      *p = '/';
+    if (*p != '/') {
+      continue;
     }
+    *p = 0;
+
+    if (!open(s)) {
+      free(s);
+      return false;
+    }
+
+    *p = '/';
   }
 
   free(s);

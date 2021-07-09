@@ -73,9 +73,9 @@ int main()
   tree.usericon_svg(&icon);
   tree.usericon_link(&icon_link);
   tree.usericon_locked(&icon_locked);
-  tree.load_root();
+  //tree.load_root();
 
-  if (tree.load_directory("/usr/share")) {
+  if (tree.load_directory("/boot/grub/../grub/fonts/////")) {
     printf("TRUE\n");
   } else {
     printf("FALSE\n");
