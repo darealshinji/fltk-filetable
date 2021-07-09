@@ -1,8 +1,28 @@
 #!/bin/sh
 set -e
 
-cxxflags="-Wall -O0 -g -I../include -I../src -I../icons"
-ldflags=""
+if [ ! -e ../fltk ]; then
+  git clone --depth 1 https://github.com/fltk/fltk ../fltk
+fi
+
+if [ ! -e ../build ]; then
+  mkdir -p ../build
+  cd ../build
+  cmake ../fltk -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_INSTALL_PREFIX="$PWD/usr" \
+    -DFLTK_BUILD_EXAMPLES=OFF \
+    -DFLTK_BUILD_TEST=OFF \
+    -DOPTION_CAIRO=ON \
+    -DOPTION_OPTIM="-O3" \
+    -DOPTION_PRINT_SUPPORT=OFF \
+    -DOPTION_USE_GL=OFF
+  make -j4
+  make install
+  cd ../examples
+fi
+
+cxxflags="-Wall -O3 -I../include -I../src -I../icons"
+ldflags="-s"
 fltk_cxxflags="$(../build/fltk-config --use-images --cxxflags)"
 fltk_ldflags="$(../build/fltk-config --use-images --ldflags)"
 
