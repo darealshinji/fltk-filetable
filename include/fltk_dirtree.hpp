@@ -45,7 +45,7 @@ private:
   std::string item_path(Fl_Tree_Item *ti);
 
 protected:
-  bool load_directory(Fl_Tree_Item *ti);
+  bool load_tree(Fl_Tree_Item *ti);
 
   // force to accept only SVG icons (for now?)
   Fl_Image *usericon() const { return NULL; }

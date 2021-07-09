@@ -167,7 +167,7 @@ void fltk_dirtree::open_callback_item()
 {
   Fl_Tree_Item *ti = callback_item();
 
-  if (!load_directory(ti)) {
+  if (!load_tree(ti)) {
     ti->clear_children();
     //ti->deactivate();
 
@@ -232,7 +232,7 @@ void fltk_dirtree::item_labelsize(Fl_Fontsize i)
   }
 }
 
-bool fltk_dirtree::load_directory(Fl_Tree_Item *ti)
+bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
 {
   struct dirent *dir;
   DIR *d;
