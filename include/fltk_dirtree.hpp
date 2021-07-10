@@ -34,20 +34,19 @@
 class fltk_dirtree : public Fl_Tree
 {
 private:
-  //char *callback_item_path_;
+  std::string callback_item_path_;
   bool show_hidden_;
   bool sort_reverse_;
   Fl_SVG_Image *icon_;
   Fl_SVG_Image *icon_link_;
   Fl_SVG_Image *icon_locked_;
 
-  //char *item_path(Fl_Tree_Item *ti);
   std::string item_path(Fl_Tree_Item *ti);
 
 protected:
   bool load_tree(Fl_Tree_Item *ti);
 
-  // force to accept only SVG icons (for now?)
+  /* force to accept only SVG icons (for now?) */
   Fl_Image *usericon() const { return NULL; }
   void usericon(Fl_Image *val) { Fl_Tree::usericon(val); }
 
@@ -55,13 +54,14 @@ public:
   fltk_dirtree(int X, int Y, int W, int H, const char *L=NULL);
   virtual ~fltk_dirtree() {}
 
-  //const char *callback_item_path();
-  std::string callback_item_path();
+  const char *callback_item_path();
   void open_callback_item();
   void close_callback_item();
 
-  bool load_root() { return Fl_Tree::open(root()); }
   bool load_directory(const char *path);
+
+  /* same as load_directory("/") */
+  bool load_root() { return Fl_Tree::open(root()); }
 
   void usericon_svg(Fl_SVG_Image *svg);
   Fl_SVG_Image *usericon_svg() const { return icon_; }

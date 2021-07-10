@@ -23,7 +23,7 @@
 */
 
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE
+#define _GNU_SOURCE  // needed for AT_NO_AUTOMOUNT
 #endif
 #include <FL/Fl.H>
 #include <FL/Fl_Tree.H>
@@ -41,6 +41,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#define DUMMY_ENTRY  NULL
+//#define DUMMY_ENTRY  "."
+
 
 // Sort class to handle sorting column using std::sort
 class fltk_dirtree_Sort {
@@ -53,9 +56,14 @@ public:
 
   bool operator() (const char *ap, const char *bp)
   {
-    // skip first byte if it's '/' (directory item)
+    // skip first byte if it's '/' (directory instead of link to directory)
     if (*ap == '/') ap++;
     if (*bp == '/') bp++;
+
+    // ignore leading dots in filenames ("bin, .config, data, .local"
+    // instead of ".config, .local, bin, data")
+    if (*ap == '.') ap++;
+    if (*bp == '.') bp++;
 
     if (isdigit(*ap) && isdigit(*bp)) {
       // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
@@ -67,11 +75,6 @@ public:
         return reverse_ ? bv < av : av < bv;
       }
     }
-
-    // ignore leading dots in filenames ("bin, .config, data, .local"
-    // instead of ".config, .local, bin, data")
-    if (*ap == '.') ap++;
-    if (*bp == '.') bp++;
 
     // Alphabetic sort
     return reverse_ ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
@@ -87,46 +90,18 @@ fltk_dirtree::fltk_dirtree(int X, int Y, int W, int H, const char *L)
   icon_ = NULL;
   icon_link_ = NULL;
   icon_locked_ = NULL;
-  //callback_item_path_ = NULL;
 
   root_label("/");
   item_reselect_mode(FL_TREE_SELECTABLE_ALWAYS);
+  connectorstyle(FL_TREE_CONNECTOR_SOLID);
 
   // start with closed root ("/") dir
-  add(root(), NULL);
+  add(root(), DUMMY_ENTRY);
   close(root(), 0);
 }
 
-/*
-fltk_dirtree::~fltk_dirtree()
-{
-  if (callback_item_path_) {
-    free(callback_item_path_);
-  }
-}
-*/
-
-/*
-char *fltk_dirtree::item_path(Fl_Tree_Item *ti)
-{
-  if (ti->is_root()) {
-    return strdup("/");
-  }
-
-  std::string s;
-
-  while (ti && !ti->is_root()) {
-    if (ti->label()) {
-      s.insert(0, ti->label());
-      s.insert(0, 1, '/');
-    }
-    ti = ti->parent();
-  }
-
-  return strdup(s.empty() ? "/" : s.c_str());
-}
-*/
-
+/* return the absolute path of an item, ignoring empty labels;
+ * using std::string for convenience */
 std::string fltk_dirtree::item_path(Fl_Tree_Item *ti)
 {
   std::string s;
@@ -136,8 +111,10 @@ std::string fltk_dirtree::item_path(Fl_Tree_Item *ti)
   }
 
   while (ti && !ti->is_root()) {
-    if (ti->label()) {
-      s.insert(0, ti->label());
+    const char *l = ti->label();
+
+    if (l && *l != 0) {
+      s.insert(0, l);
       s.insert(0, 1, '/');
     }
     ti = ti->parent();
@@ -146,28 +123,26 @@ std::string fltk_dirtree::item_path(Fl_Tree_Item *ti)
   return s;
 }
 
-/*
+/* return the path of the last selected item or NULL
+ * if nothing was selected yet */
 const char *fltk_dirtree::callback_item_path()
 {
-  if (callback_item_path_) {
-    free(callback_item_path_);
-  }
-
   callback_item_path_ = item_path(callback_item());
 
-  return callback_item_path_;
-}
-*/
-inline std::string fltk_dirtree::callback_item_path()
-{
-  return item_path(callback_item());
+  if (callback_item_path_.empty()) {
+    return NULL;
+  }
+
+  return callback_item_path_.c_str();
 }
 
+/* a '+' sign was clicked */
 void fltk_dirtree::open_callback_item()
 {
   Fl_Tree_Item *ti = callback_item();
 
   if (!load_tree(ti)) {
+    /* don't add a dummy entry, so that the plus sign will disappear */
     ti->clear_children();
     //ti->deactivate();
 
@@ -177,13 +152,17 @@ void fltk_dirtree::open_callback_item()
   }
 }
 
+/* a '-' sign was clicked */
 inline void fltk_dirtree::close_callback_item()
 {
   Fl_Tree_Item *ti = callback_item();
   ti->clear_children();
-  add(ti, NULL);
+  close(ti, 0);
+  add(ti, DUMMY_ENTRY); // dummy entry so the plus sign appears
 }
 
+/* basically an SVG-only wrapper for the protected
+ * method fltk_dirtree::usericon() */
 void fltk_dirtree::usericon_svg(Fl_SVG_Image *svg)
 {
   if (svg && !svg->fail()) {
@@ -193,6 +172,7 @@ void fltk_dirtree::usericon_svg(Fl_SVG_Image *svg)
   }
 }
 
+/* set a different icon for directory links */
 void fltk_dirtree::usericon_link(Fl_SVG_Image *svg)
 {
   if (svg && !svg->fail()) {
@@ -201,6 +181,7 @@ void fltk_dirtree::usericon_link(Fl_SVG_Image *svg)
   }
 }
 
+/* set a different icon for unaccessible directories */
 void fltk_dirtree::usericon_locked(Fl_SVG_Image *svg)
 {
   if (svg && !svg->fail()) {
@@ -209,6 +190,8 @@ void fltk_dirtree::usericon_locked(Fl_SVG_Image *svg)
   }
 }
 
+/* set the labelsize on items including root()
+ * and adjust the icon size accordingly too */
 void fltk_dirtree::item_labelsize(Fl_Fontsize i)
 {
   if (i == Fl_Tree::item_labelsize()) {
@@ -232,16 +215,15 @@ void fltk_dirtree::item_labelsize(Fl_Fontsize i)
   }
 }
 
+/* open a directory from a selected Fl_Tree_Item */
 bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
 {
   struct dirent *dir;
   DIR *d;
   std::vector<char *> list;
 
-  //char *path = item_path(ti);
   std::string path = item_path(ti);
   int fd = ::open(path.c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY);
-  //free(path);
 
   if (fd == -1) {
     return false;
@@ -255,33 +237,34 @@ bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
   while ((dir = readdir(d)) != NULL) {
     struct stat st, lst;
 
-    // handle hidden files
+    /* handle hidden files */
     if (!show_hidden() && dir->d_name[0] == '.') {
       continue;
     }
 
-    // no "." and ".." entries
+    /* no "." and ".." entries */
     if (show_hidden() && (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0)) {
       continue;
     }
 
-    // act like lstat()
+    /* act like lstat() */
     if (fstatat(fd, dir->d_name, &lst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == -1) {
       continue;
     }
 
-    // use first byte to identify entry as a link or directory
+    /* use first byte to identify entry as a link or directory */
     if (S_ISDIR(lst.st_mode)) {
-      // directory: entry begins with '/'
+      /* directory: entry begins with '/' */
       char *buf = reinterpret_cast<char *>(malloc(strlen(dir->d_name) + 1));
       buf[0] = '/';
       strcpy(buf + 1, dir->d_name);
       list.push_back(buf);
     }
-    else if (S_ISLNK(lst.st_mode) && // act like stat()
+    else if (S_ISLNK(lst.st_mode) &&
+             /* act like stat() */
              fstatat(fd, dir->d_name, &st, AT_NO_AUTOMOUNT) == 0 && S_ISDIR(st.st_mode))
     {
-      // link to directory: does NOT begin with '/'
+      /* link to directory: does NOT begin with '/' */
       list.push_back(strdup(dir->d_name));
     }
   }
@@ -291,6 +274,7 @@ bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
   ti->clear_children();
 
   if (list.size() == 0) {
+    close(ti, 0);
     return true;
   }
 
@@ -298,34 +282,42 @@ bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
 
   for (auto elem : list) {
     add(ti, elem[0] == '/' ? elem + 1 : elem);
-    auto sub = ti->child(ti->children() - 1);
+    Fl_Tree_Item *sub = ti->child(ti->has_children() ? ti->children() - 1 : 0);
 
     if (elem[0] != '/' && icon_link_) {
       sub->usericon(icon_link_);
     }
-    add(sub, NULL);
 
-    close(sub);
+    sub->clear_children();
+    close(sub, 0);
+    add(sub, DUMMY_ENTRY);
+
     free(elem);
   }
 
   return true;
 }
 
+/* load a directory from a given path */
 bool fltk_dirtree::load_directory(const char *path)
 {
   char *s, *p;
+  bool rv;
 
-  if (!path || path[0] != '/') {
+  if (!path || path[0] == 0) {
     return false;
   }
 
+  if (path[0] == '/' && path[1] == 0) {
+    return load_root();
+  }
+
   if ((s = fltk_filetable_::simplify_directory_path(path)) == NULL) {
+    /* fallback */
     s = strdup(path);
   }
   p = s;
 
-  //printf("%s\n", s);
   open(root());
 
   while (*++p) {
@@ -334,7 +326,7 @@ bool fltk_dirtree::load_directory(const char *path)
     }
     *p = 0;
 
-    if (!open(s)) {
+    if (*s && !open(s)) {
       free(s);
       return false;
     }
@@ -342,8 +334,10 @@ bool fltk_dirtree::load_directory(const char *path)
     *p = '/';
   }
 
+  /* finally open the full simplified(!) path */
+  rv = open(s);
   free(s);
 
-  return open(path);
+  return rv;
 }
 

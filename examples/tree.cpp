@@ -43,8 +43,8 @@ static void myCallback(Fl_Widget *o, void *)
   switch(tr->callback_reason()) {
     case FL_TREE_REASON_RESELECTED:
     case FL_TREE_REASON_SELECTED: {
-        std::string path = tr->callback_item_path();
-        printf("%s\n", path.c_str());
+        const char *path = tr->callback_item_path();
+        if (path) printf("%s\n", path);
       }
       break;
     case FL_TREE_REASON_OPENED:
@@ -60,6 +60,8 @@ static void myCallback(Fl_Widget *o, void *)
 
 int main()
 {
+  const char *dir = NULL;
+
   Fl_Double_Window win(300, 600, "Tree");
 
   fltk_dirtree tree(5, 5, win.w()-10, win.h()-10);
@@ -73,12 +75,15 @@ int main()
   tree.usericon_svg(&icon);
   tree.usericon_link(&icon_link);
   tree.usericon_locked(&icon_locked);
-  //tree.load_root();
 
-  if (tree.load_directory("/boot/grub/../grub/fonts/////")) {
+  dir = "/boot/grub/../grub/fonts/////";
+  //dir = ".";
+
+  if (tree.load_directory(dir)) {
     printf("TRUE\n");
   } else {
     printf("FALSE\n");
+    tree.load_root();
   }
 
   win.end();
