@@ -255,7 +255,7 @@ bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
     /* use first byte to identify entry as a link or directory */
     if (S_ISDIR(lst.st_mode)) {
       /* directory: entry begins with '/' */
-      char *buf = reinterpret_cast<char *>(malloc(strlen(dir->d_name) + 1));
+      char *buf = reinterpret_cast<char *>(malloc(strlen(dir->d_name) + 2));
       buf[0] = '/';
       strcpy(buf + 1, dir->d_name);
       list.push_back(buf);

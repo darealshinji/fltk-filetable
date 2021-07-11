@@ -1,2 +1,1 @@
 add_filter() for MIME types? (probably not...)
-semi-random crashes on fltk_dirtree on some directories (/lib, /usr/lib, /usr/share, ...)
