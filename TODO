@@ -1,1 +1,1 @@
-add_filter() for MIME types? (probably not...)
+fix filetable_magic multithreading issues

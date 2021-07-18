@@ -218,7 +218,7 @@ xdg::xdg()
   home_dir = NULL;
   home_len = 0;
 
-  for (auto i = 0; i < LAST; ++i) {
+  for (int i = 0; i < LAST; ++i) {
     dirs[i] = NULL;
   }
 }
@@ -229,7 +229,7 @@ xdg::~xdg()
     free(home_dir);  /* strdup()'ed, so use free() */
   }
 
-  for (auto i = 0; i < LAST; ++i) {
+  for (int i = 0; i < LAST; ++i) {
     if (dirs[i]) {
       delete dirs[i];
     }

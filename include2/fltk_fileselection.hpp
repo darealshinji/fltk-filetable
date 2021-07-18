@@ -27,41 +27,20 @@
 
 #include <FL/Fl.H>
 #include <FL/Fl_Group.H>
-
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_.hpp"
 
 
-namespace fltk
-{
-
-class fileselection : public Fl_Group
+class fltk_fileselection : public Fl_Group
 {
 private:
-  dirtree *tree_;
-  filetable_ *table_;
+  fltk_dirtree *tree_;
+  fltk_filetable_ *table_;
   char *selection_;
 
 public:
-  fileselection(int X, int Y, int W, int H, filetable_ *table, const char *L=NULL) : Fl_Group(X,Y,W,H,L)
-  {
-    table_ = table;
-    tree_ = NULL;  // TODO: add fltk_dirtree() sidebar
-    selection_ = NULL;
-
-    if (table_) {
-      table_->resize(X, Y, W, H);
-    }
-  }
-
-  ~fileselection()
-  {
-    if (selection_) {
-      free(selection_);
-    }
-  }
+  fltk_fileselection(int X, int Y, int W, int H, fltk_filetable_ *table, const char *L=NULL);
+  ~fltk_fileselection();
 };
-
-} // namespace fltk
 
 #endif  // fltk_fileselection_hpp

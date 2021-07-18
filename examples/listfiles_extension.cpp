@@ -25,12 +25,9 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Double_Window.H>
+#include <cassert>
 
 #include "fltk_filetable_extension.hpp"
-#include "fltk_filetable_.hpp"
-
-#include "fltk_filetable_extension.cpp"
-#include "fltk_filetable_.cpp"
 
 #include "Folder_generic.svg.h"
 #include "File_Generic.svg.h"
@@ -45,19 +42,19 @@
 static void up_cb(Fl_Widget *, void *v)
 {
   assert(v != NULL);
-  reinterpret_cast<fltk_filetable_extension *>(v)->dir_up();
+  reinterpret_cast<fltk::filetable_extension *>(v)->dir_up();
 }
 
 static void refresh_cb(Fl_Widget *, void *v)
 {
   assert(v != NULL);
-  reinterpret_cast<fltk_filetable_extension *>(v)->refresh();
+  reinterpret_cast<fltk::filetable_extension *>(v)->refresh();
 }
 
 static void hidden_cb(Fl_Widget *, void *v)
 {
   assert(v != NULL);
-  fltk_filetable_extension *t = reinterpret_cast<fltk_filetable_extension *>(v);
+  fltk::filetable_extension *t = reinterpret_cast<fltk::filetable_extension *>(v);
   t->show_hidden(t->show_hidden() ? false : true);
   t->refresh();
 }
@@ -78,7 +75,7 @@ int main()
 
   Fl_Double_Window win(900, 500, "Test");
 
-    fltk_filetable_extension table(MARGIN, MARGIN, win.w()-MARGIN*2, win.h()-40-MARGIN*2);
+    fltk::filetable_extension table(MARGIN, MARGIN, win.w()-MARGIN*2, win.h()-40-MARGIN*2);
     table.autowidth_max(table.w()/2);
     table.double_click_timeout(0.5);
     table.labelfont(FL_HELVETICA);
@@ -86,9 +83,9 @@ int main()
     //table.add_filter(".cpp");
     //table.add_filter_list(".zip|.tar|rar||", "|");
 
-    table.set_icon(NULL, folder_generic_svg, fltk_filetable_extension::ICN_DIR);
-    table.set_icon(NULL, file_generic_svg, fltk_filetable_extension::ICN_FILE);
-    table.set_icon(NULL, overlay_link_svg, fltk_filetable_extension::ICN_LINK);
+    table.set_icon(NULL, folder_generic_svg, fltk::filetable_extension::ICN_DIR);
+    table.set_icon(NULL, file_generic_svg, fltk::filetable_extension::ICN_FILE);
+    table.set_icon(NULL, overlay_link_svg, fltk::filetable_extension::ICN_LINK);
     table.set_icon(NULL, file_text_svg, txt, delim);
     table.set_icon(NULL, file_image_3_svg, imgs, delim);
     table.set_icon(NULL, file_video_svg, vid, delim);

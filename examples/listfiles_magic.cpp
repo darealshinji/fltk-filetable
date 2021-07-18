@@ -28,10 +28,6 @@
 #include <cassert>
 
 #include "fltk_filetable_magic.hpp"
-#include "fltk_filetable_.hpp"
-
-#include "fltk_filetable_magic.cpp"
-#include "fltk_filetable_.cpp"
 
 #include "Folder_generic.svg.h"
 #include "File_Generic.svg.h"
@@ -51,19 +47,19 @@
 static void up_cb(Fl_Widget *, void *v)
 {
   assert(v != NULL);
-  reinterpret_cast<fltk_filetable_magic *>(v)->dir_up();
+  reinterpret_cast<fltk::filetable_magic *>(v)->dir_up();
 }
 
 static void refresh_cb(Fl_Widget *, void *v)
 {
   assert(v != NULL);
-  reinterpret_cast<fltk_filetable_magic *>(v)->refresh();
+  reinterpret_cast<fltk::filetable_magic *>(v)->refresh();
 }
 
 static void hidden_cb(Fl_Widget *, void *v)
 {
   assert(v != NULL);
-  fltk_filetable_magic *t = reinterpret_cast<fltk_filetable_magic *>(v);
+  fltk::filetable_magic *t = reinterpret_cast<fltk::filetable_magic *>(v);
   t->show_hidden(t->show_hidden() ? false : true);
   t->refresh();
 }
@@ -73,7 +69,7 @@ int main()
 {
   Fl_Double_Window win(900, 500, "Test");
 
-    fltk_filetable_magic table(MARGIN, MARGIN, win.w()-MARGIN*2, win.h()-40-MARGIN*2);
+    fltk::filetable_magic table(MARGIN, MARGIN, win.w()-MARGIN*2, win.h()-40-MARGIN*2);
     table.autowidth_max(table.w()/2);
     table.double_click_timeout(0.5);
     table.labelfont(FL_HELVETICA);
@@ -81,13 +77,13 @@ int main()
 
     //table.add_filter(".cpp");
 
-    table.set_icon(NULL, folder_generic_svg, fltk_filetable_magic::ICN_DIR);
-    table.set_icon(NULL, file_generic_svg, fltk_filetable_magic::ICN_FILE);
-    table.set_icon(NULL, file_device_svg, fltk_filetable_magic::ICN_CHR);
-    table.set_icon(NULL, file_device_svg, fltk_filetable_magic::ICN_BLK);
-    table.set_icon(NULL, file_pipe_svg, fltk_filetable_magic::ICN_PIPE);
-    table.set_icon(NULL, file_pipe_svg, fltk_filetable_magic::ICN_SOCK);
-    table.set_icon(NULL, overlay_link_svg, fltk_filetable_magic::ICN_LINK);
+    table.set_icon(NULL, folder_generic_svg, fltk::filetable_magic::ICN_DIR);
+    table.set_icon(NULL, file_generic_svg, fltk::filetable_magic::ICN_FILE);
+    table.set_icon(NULL, file_device_svg, fltk::filetable_magic::ICN_CHR);
+    table.set_icon(NULL, file_device_svg, fltk::filetable_magic::ICN_BLK);
+    table.set_icon(NULL, file_pipe_svg, fltk::filetable_magic::ICN_PIPE);
+    table.set_icon(NULL, file_pipe_svg, fltk::filetable_magic::ICN_SOCK);
+    table.set_icon(NULL, overlay_link_svg, fltk::filetable_magic::ICN_LINK);
 
     table.set_icon(NULL, file_pdf_svg, "application/x-pdf;");
     table.set_icon(NULL, file_text_svg, "text");
@@ -111,6 +107,8 @@ int main()
   win.end();
   win.resizable(table);
   win.show();
+
+  //Fl::lock();
 
   int rv = Fl::run();
 

@@ -27,19 +27,14 @@
 
 #include "fltk_fileselection.hpp"
 #include "fltk_filetable_simple.hpp"
-#include "fltk_filetable_.hpp"
-
-#include "fltk_fileselection.cpp"
-#include "fltk_filetable_simple.cpp"
-#include "fltk_filetable_.cpp"
 
 
 int main()
 {
   Fl_Double_Window win(500, 400, "Test");
 
-  fltk_filetable_simple table(0, 0, 0, 0);
-  fltk_fileselection sel(0, 0, win.w(), win.h(), &table);
+  fltk::filetable_simple table(0, 0, 0, 0);
+  fltk::fileselection sel(0, 0, win.w(), win.h(), &table);
 
   table.load_dir("/");
 

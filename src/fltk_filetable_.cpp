@@ -20,6 +20,9 @@
 //
 //     https://www.fltk.org/bugs.php
 //
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 #include <FL/Fl.H>
 #include <FL/fl_draw.H>
@@ -27,8 +30,11 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 #include <errno.h>
 #include <dirent.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -57,8 +63,8 @@
   "<svg width='16' height='16'>" \
    "<defs>" \
     "<linearGradient id='a' x1='16' x2='0' y1='8' y2='8'>" \
-     "<stop stop-color='" COLOR "' offset='0'/>" \
-     "<stop stop-color='" COLOR "' stop-opacity='0' offset='1'/>" \
+     "<stop stop-color='#" COLOR "' offset='0'/>" \
+     "<stop stop-color='#" COLOR "' stop-opacity='0' offset='1'/>" \
     "</linearGradient>" \
    "</defs>" \
    "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
@@ -132,14 +138,11 @@ fltk_filetable_Row::fltk_filetable_Row()
 }
 
 fltk_filetable_::fltk_filetable_(int X, int Y, int W, int H, const char *L)
- : Fl_Table_Row(X, Y, W, H, L)
+: Fl_Table_Row(X, Y, W, H, L)
 {
   label_header_[COL_NAME] = STR_NAME;
   label_header_[COL_SIZE] = STR_SIZE;
   label_header_[COL_LAST_MOD] = STR_LAST_MOD;
-
-  open_directory_ = NULL;
-  selection_ = NULL;
 
   sort_reverse_ = 0;
   sort_last_row_ = 0;
@@ -151,7 +154,7 @@ fltk_filetable_::fltk_filetable_(int X, int Y, int W, int H, const char *L)
   svg_link_ = NULL;
 
   color(FL_WHITE);
-  icon_square_[0] = new Fl_SVG_Image(NULL, SVG_DATA("#fff"));
+  icon_square_[0] = new Fl_SVG_Image(NULL, SVG_DATA("fff"));
 
   if (icon_square_[0]->fail()) {
     delete icon_square_[0];
@@ -161,7 +164,7 @@ fltk_filetable_::fltk_filetable_(int X, int Y, int W, int H, const char *L)
   }
 
   selection_color(fl_rgb_color(0x41, 0x69, 0xE1));
-  icon_square_[1] = new Fl_SVG_Image(NULL, SVG_DATA("#4169E1"));
+  icon_square_[1] = new Fl_SVG_Image(NULL, SVG_DATA("4169E1"));
 
   if (icon_square_[1]->fail()) {
     delete icon_square_[1];
@@ -184,14 +187,6 @@ fltk_filetable_::~fltk_filetable_()
 {
   clear();
 
-  if (open_directory_) {
-    free(open_directory_);
-  }
-
-  if (selection_) {
-    free(selection_);
-  }
-
   if (icon_square_[0]) {
     delete icon_square_[0];
   }
@@ -199,13 +194,6 @@ fltk_filetable_::~fltk_filetable_()
   if (icon_square_[1]) {
     delete icon_square_[1];
   }
-
-  while (filter_list_.size() > 0) {
-    delete filter_list_.back().str;
-    filter_list_.pop_back();
-  }
-
-  filter_list_.clear();
 }
 
 void fltk_filetable_::clear()
@@ -502,6 +490,32 @@ void fltk_filetable_::event_callback2()
   //last_row_clicked_ = row;
 }
 
+void fltk_filetable_::double_click_callback()
+{
+  const char *name = rowdata_[last_row_clicked_].cols[COL_NAME];
+  std::string dir;
+
+  if (!open_directory_.empty()) {
+    dir = open_directory_;
+
+    if (dir.back() != '/') {
+      dir.push_back('/');
+    }
+    dir += name;
+    name = dir.c_str();
+  }
+
+  if (rowdata_[last_row_clicked_].isdir()) {
+    if (!load_dir(name)) {
+      // refresh current directory if we cannot access
+      load_dir(NULL);
+    }
+  } else {
+    selection_ = name;
+    window()->hide();
+  }
+}
+
 inline const char *fltk_filetable_::label_header(int idx)
 {
   return (idx >= 0 && idx < COL_MAX) ? label_header_[idx] : NULL;
@@ -514,52 +528,73 @@ inline void fltk_filetable_::label_header(int idx, const char *l)
   }
 }
 
-void fltk_filetable_::human_readable_filesize(char *buf, size_t bufsize, long bytes)
+char *fltk_filetable_::printf_alloc(const char *fmt, ...)
+{
+  char *buf;
+  va_list args, args2;
+
+  va_start(args, fmt);
+  va_copy(args2, args);
+  buf = reinterpret_cast<char *>(malloc(vsnprintf(nullptr, 0, fmt, args2) + 1));
+  va_end(args2);
+  vsprintf(buf, fmt, args);
+  va_end(args);
+
+  return buf;
+}
+
+char *fltk_filetable_::human_readable_filesize(long bytes)
 {
   const int KiBYTES = 1024;
   const int MiBYTES = 1024 * KiBYTES;
   const int GiBYTES = 1024 * MiBYTES;
 
   if (bytes > GiBYTES) {
-    snprintf(buf, bufsize, "%.1Lf " STR_GBYTES " ", static_cast<long double>(bytes) / GiBYTES);
+    return printf_alloc("%.1Lf " STR_GBYTES " ", static_cast<long double>(bytes) / GiBYTES);
   } else if (bytes > MiBYTES) {
-    snprintf(buf, bufsize, "%.1Lf " STR_MBYTES " ", static_cast<long double>(bytes) / MiBYTES);
+    return printf_alloc("%.1Lf " STR_MBYTES " ", static_cast<long double>(bytes) / MiBYTES);
   } else if (bytes > KiBYTES) {
-    snprintf(buf, bufsize, "%.1Lf " STR_KBYTES " ", static_cast<long double>(bytes) / KiBYTES);
-  } else {
-    snprintf(buf, bufsize, "%ld " STR_BYTES " ", bytes);
+    return printf_alloc("%.1Lf " STR_KBYTES " ", static_cast<long double>(bytes) / KiBYTES);
   }
+
+  return printf_alloc("%ld " STR_BYTES " ", bytes);
 }
 
-long fltk_filetable_::count_dir_entries(char *buf, size_t bufsize, const char *path)
+char *fltk_filetable_::count_dir_entries(long &count, const char *directory)
 {
   const char *unknown = "?? " STR_ELEMENTS " ";
-  DIR *dirp = opendir(path);
+  char *buf;
+
+  std::string path = open_directory_;
+  path.push_back('/');
+  path += directory;
+
+  DIR *dirp = opendir(path.c_str());
 
   if (!dirp) {
-    strncpy(buf, unknown, bufsize);
-    return -1;
+    count = -1;
+    return strdup(unknown);
   }
 
-  long n = 0;
+  count = 0;
   errno = 0;
 
   while (readdir(dirp)) {
-    n++;
+    count++;
   }
 
-  n -= 2;  // don't count the '.' and '..' entries
+  count -= 2;  // don't count the '.' and '..' entries
 
-  if (errno != 0 || n < 0) {
-    strncpy(buf, unknown, bufsize);
-    n = -1;
+  if (errno != 0 || count < 0) {
+    buf = strdup(unknown);
+    count = -1;
   } else {
-    snprintf(buf, bufsize, "%ld " STR_ELEMENTS " ", n);
+    buf = printf_alloc("%ld " STR_ELEMENTS " ", count);
   }
 
   closedir(dirp);
 
-  return n;
+  return buf;
 }
 
 bool fltk_filetable_::filter_show_entry(const char *filename)
@@ -574,12 +609,12 @@ bool fltk_filetable_::filter_show_entry(const char *filename)
     return false;
   }
 
-  for (auto & ext : filter_list_) {
-    if (ext.size >= len) {
+  for (std::string & ext : filter_list_) {
+    if (ext.size() >= len) {
       continue;
     }
 
-    if (strcasecmp(filename + (len - ext.size), ext.str) == 0) {
+    if (strcasecmp(filename + (len - ext.size()), ext.c_str()) == 0) {
       return true;
     }
   }
@@ -587,185 +622,90 @@ bool fltk_filetable_::filter_show_entry(const char *filename)
   return false;
 }
 
-// resolve '.' and '..' but don't follow symlinks
-// based on https://www.geeksforgeeks.org/simplify-directory-path-unix-like/
-//
-// returns allocated string on success and NULL on error
-char *fltk_filetable_::simplify_directory_path(const char *in)
-{
-  char *buf, *p, *ptr;
-  size_t len;
 
-  if (!in || (len = strlen(in)) == 0) {
+// resolve '.' and '..' but don't follow symlinks
+char *fltk_filetable_::simplify_directory_path(const char *path)
+{
+  std::vector<std::string> vec;
+  std::string in, out;
+
+  if (!path || path[0] == 0) {
     return NULL;
   }
 
-  // quick handling of '/' and '.'
-  if (len == 1) {
-    if (in[0] == '/') {
-      return strdup("/");
-    } else if (in[0] == '.') {
-      return get_current_dir_name();
-    }
+  in = path;
+
+  // strip trailing '/'
+  while (in.back() == '/') {
+    in.pop_back();
   }
 
-  if (in[0] == '/') {
-    // absolute path
+  // path was only slashes
+  if (in.empty()) {
+    return strdup("/");
+  }
 
-    p = strdup(in);
+  if (in == ".") {
+    return get_current_dir_name();
+  }
 
-    // remove trailing slashes
-    while (len > 0 && p[len - 1] == '/') {
-      p[len - 1] = 0;
-      len--;
-    }
+  // prepend current directory
+  if (in[0] != '/') {
+    char *cdn = get_current_dir_name();
 
-    if (p[0] == 0) {
-      // only slashes
-      free(p);
-      return strdup("/");
-    }
-
-    ptr = strrchr(p, '/');
-
-    // check if it ends on '/.' or '/..' or
-    // if there are '/./', '/../', or '//' entries
-    if (strcmp(ptr, "/.") != 0 && strcmp(ptr, "/..") != 0 &&
-        !strstr(p, "//") && !strstr(p, "/./") && !strstr(p, "/../"))
-    {
-      return reinterpret_cast<char *>(realloc(p, len));
-    }
-  } else {
-    // relative path
-
-    if ((ptr = get_current_dir_name()) == NULL) {
+    if (!cdn) {
       return NULL;
     }
-
-    // prepend "<cdn>/" to relative path
-    len = strlen(ptr);
-    p = reinterpret_cast<char *>(malloc(len + strlen(in) + 2));
-    strcpy(p, ptr);
-    p[len] = '/';
-    strcpy(p + len + 1, in);
-    len = strlen(p);
-
-    free(ptr);
+    in.insert(0, 1, '/');
+    in.insert(0, cdn);
   }
 
-  // count elements
-  size_t nElem = 0;
+  // insert trailing '/' (it's needed)
+  in.push_back('/');
 
-  for (size_t i = 0; i < len; ++i) {
-    bool found = false;
+  // check if the path even needs to be simplified
+  if (in.find("//") == std::string::npos &&
+      in.find("/./") == std::string::npos &&
+      in.find("/../") == std::string::npos)
+  {
+    in.pop_back();  // remove trailing '/'
+    return strdup(in.c_str());
+  }
 
-    while (p[i] == '/') {
+  for (size_t i = 0; i < in.size(); ++i) {
+    std::string dir;
+
+    while (in[i] == '/') {
       i++;
     }
 
-    if (p[i] == '.') {
-      if (p[i + 1] == '/') {
-        // skip '.' entry
-        i++;
-        continue;
-      } else if (p[i + 1] == 0) {
-        // last element is '.'
-        break;
-      }
-    }
-
-    while (i < len && p[i] != '/') {
-      i++;
-      found = true;
-    }
-
-    if (found) {
-      nElem++;
-    }
-  }
-
-  // path consisted only of slahes and maybe "."
-  // elements, so we can already resolve it to "/"
-  if (nElem == 0) {
-    free(p);
-    return strdup("/");
-  }
-
-  char *stack[nElem];
-
-  for (size_t i = 0; i < nElem; ++i) {
-    stack[i] = NULL;
-  }
-
-  buf = reinterpret_cast<char *>(malloc(len + 1));
-  size_t len2 = 0;
-  size_t nSt = 0;
-
-  for (size_t i = 0; i < len; ++i) {
-    ptr = buf;
-    memset(buf, 0, len);
-
-    // skip all '/'
-    while (p[i] == '/') {
+    while (in[i] != '/') {
+      dir.push_back(in[i]);
       i++;
     }
 
-    // copy element into buffer
-    while (i < len && p[i] != '/') {
-      *ptr = p[i];
-      ptr++;
-      i++;
-    }
-
-    if (strcmp(buf, "..") == 0) {
-      // if element was ".." and stack is not empty,
-      // pop the last element, otherwise ignore
-      if (stack[0] != NULL) {
-        free(stack[nSt]);
-        stack[nSt] = NULL;
-
-        if (nSt > 0) {
-          nSt--;
-        }
-      }
-    } else if (strcmp(buf, ".") == 0) {
-      // ignore "." entries
+    if (dir == "..") {
+      // remove last entry or ignore
+      if (vec.size() > 0) vec.pop_back();
+    } else if (dir == ".") {
+      // ignore '.' entry
       continue;
-    } else if (strlen(buf) != 0) {
-      // push back
-      stack[nSt] = strdup(buf);
-      len2 += strlen(buf) + 1;
-
-      if (++nSt >= nElem) {
-        break;
-      }
+    } else if (dir.size() > 0) {
+      vec.push_back(dir);
     }
   }
 
-  free(p);
-  free(buf);
-
-  // path was resolved from i.e. "/usr/../" to "/"
-  if (nSt == 0) {
+  // path was resolved to "/"
+  if (vec.size() == 0) {
     return strdup("/");
   }
 
-  // copy elements to buffer
-  buf = reinterpret_cast<char *>(malloc(len2 + 1));
-  buf[0] = 0;
-  ptr = buf;
-
-  for (size_t i = 0; i < nSt; ++i) {
-    *ptr = '/';
-    strcpy(ptr+1, stack[i]);
-    free(stack[i]);
-
-    while (*ptr) {
-      ptr++;
-    }
+  for (const auto elem : vec) {
+    out.push_back('/');
+    out += elem;
   }
 
-  return buf;
+  return strdup(out.c_str());
 }
 
 // Load table
@@ -774,56 +714,38 @@ bool fltk_filetable_::load_dir(const char *dirname)
   DIR *d;
   struct dirent *dir;
   int r = 0;
-  size_t len;
 
   clear();
 
-  if (!dirname && !open_directory_) {
+  if (!dirname && open_directory_.empty()) {
     return false;
   }
 
   if (dirname) {
-    d = opendir(dirname);
-
-    if (!d) {
-      return false;
-    }
-
-    if (open_directory_) {
-      free(open_directory_);
-    }
-
     open_directory_ = simplify_directory_path(dirname);
 
-    if (!open_directory_) {
+    if (open_directory_.empty()) {
       // fall back to using realpath() if needed
-      open_directory_ = realpath(dirname, NULL);
-
-      if (!open_directory_) {
-        open_directory_ = strdup(dirname);
-      }
-    }
-  } else {
-    // calling load_dir(NULL) acts as a "refresh"
-    d = opendir(open_directory_);
-
-    if (!d) {
-      return false;
+      char *rp = realpath(dirname, NULL);
+      open_directory_ = rp ? rp : dirname;
     }
   }
 
-  // copy the full directory path once and not
-  // on each while() iteration
-  len = strlen(open_directory_);
-  char *path = static_cast<char *>(malloc(len + 2));
-  strcpy(path, open_directory_);
-  path[len] = '/';
-  len++;
+  // calling load_dir(NULL) acts as a "refresh" using
+  // the current open_directory_
+  if ((d = opendir(open_directory_.c_str())) == NULL) {
+    return false;
+  }
+
+  int fd = ::open(open_directory_.c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY);
+
+  if (fd == -1) {
+    return false;
+  }
 
   while ((dir = readdir(d)) != NULL) {
     struct stat st, lst;
     fltk_filetable_Row row;
-    char buf[64];
     int rv_stat = -1;
     int rv_lstat = -1;
 
@@ -837,37 +759,34 @@ bool fltk_filetable_::load_dir(const char *dirname)
       continue;
     }
 
-    // create full path to file/dir for (l)stat()
-    path = static_cast<char *>(realloc(path, len + strlen(dir->d_name) + 1));
-    strcpy(path + len, dir->d_name);
-
-    // run lstat() in case of dead link
-    if ((rv_stat = stat(path, &st)) == -1) {
-      rv_lstat = lstat(path, &st);
+    if ((rv_stat = fstatat(fd, dir->d_name, &st, AT_NO_AUTOMOUNT)) == -1) {
+      // don't follow link in case of dead link
+      rv_lstat = fstatat(fd, dir->d_name, &st, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW);
     }
 
     if (rv_stat == 0 || rv_lstat == 0) {
       // is link?
       if (rv_lstat == 0) {
-        if (S_ISLNK(st.st_mode)) { // lst.st_mode???
+        if (S_ISLNK(st.st_mode)) {
           row.setlnk();
         }
-      } else if (lstat(path, &lst) == 0 && S_ISLNK(lst.st_mode)) {
+      } else if (fstatat(fd, dir->d_name, &lst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == 0
+                 && S_ISLNK(lst.st_mode))
+      {
         row.setlnk();
       }
 
       // dircheck and size
       if (S_ISDIR(st.st_mode)) {
         row.type('D');
-        row.bytes = count_dir_entries(buf, sizeof(buf) - 1, path);
-        row.cols[COL_SIZE] = strdup(buf);
+        row.cols[COL_SIZE] = count_dir_entries(row.bytes, dir->d_name);
       } else {
         // check for file extensions
         if (!filter_show_entry(dir->d_name)) {
           continue;
         }
-        human_readable_filesize(buf, sizeof(buf) - 1, st.st_size);
-        row.cols[COL_SIZE] = strdup(buf);
+
+        row.cols[COL_SIZE] = human_readable_filesize(st.st_size);
         row.bytes = st.st_size;
 
         switch (st.st_mode & S_IFMT) {
@@ -895,8 +814,7 @@ bool fltk_filetable_::load_dir(const char *dirname)
       }
 
       // last modified
-      snprintf(buf, sizeof(buf) - 1, " %s", ctime(&st.st_mtime));
-      row.cols[COL_LAST_MOD] = strdup(buf);
+      row.cols[COL_LAST_MOD] = printf_alloc(" %s", ctime(&st.st_mtime));
       row.last_mod = st.st_mtime;
     }
 
@@ -908,7 +826,6 @@ bool fltk_filetable_::load_dir(const char *dirname)
   }
 
   closedir(d);
-  free(path);
 
   cols(COL_MAX);
   rows(rowdata_.size());
@@ -930,21 +847,12 @@ void fltk_filetable_::add_filter(const char *str)
     return;
   }
 
-  size_t len = strlen(str);
-
-  char *buf = new char[len + 2];
+  std::string ext;
 
   if (str[0] != '.') {
-    buf[0] = '.';
-    strcpy(buf + 1, str);
-    len++;
-  } else {
-    strcpy(buf, str);
+    ext = ".";
   }
-
-  ext_t ext;
-  ext.str = buf;
-  ext.size = len;
+  ext += str;
 
   filter_list_.push_back(ext);
 }
@@ -979,24 +887,22 @@ inline bool fltk_filetable_::refresh()
 
 bool fltk_filetable_::dir_up()
 {
-  if (!open_directory_) {
+  if (open_directory_.empty()) {
     return load_dir("..");
   }
 
-  if (strcmp(open_directory_, "/") == 0) {
+  if (open_directory_ == "/") {
     return false;
   }
 
-  size_t len = strlen(open_directory_);
-  char buf[len + 3];
-  strcpy(buf, open_directory_);
-  strcpy(buf + len, "/..");
+  std::string dir = open_directory_;
+  dir += "/..";
 
-  return load_dir(buf);
+  return load_dir(dir.c_str());
 }
 
-inline char * const fltk_filetable_::selection()
+inline const char *fltk_filetable_::selection()
 {
-  return selection_;
+  return selection_.empty() ? NULL : selection_.c_str();
 }
 

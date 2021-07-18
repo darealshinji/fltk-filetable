@@ -182,34 +182,6 @@ bool fltk_filetable_magic::load_symbols()
 }
 #endif
 
-void fltk_filetable_magic::double_click_callback()
-{
-  const char *name = rowdata_[last_row_clicked_].cols[COL_NAME];
-  char *buf = NULL;
-
-  if (open_directory_) {
-    size_t len = strlen(open_directory_);
-    const char *format = (open_directory_[len - 1] == '/') ? "%s%s" : "%s/%s";
-    buf = new char[len + strlen(name) + 1];
-    sprintf(buf, format, open_directory_, name);
-    name = buf;
-  }
-
-  if (rowdata_[last_row_clicked_].isdir()) {
-    if (!load_dir(name)) {
-      // refresh current directory if we cannot access
-      load_dir(NULL);
-    }
-  } else {
-    selection_ = strdup(name);
-    window()->hide();  // keep this?
-  }
-
-  if (buf) {
-    delete buf;
-  }
-}
-
 bool fltk_filetable_magic::load_dir(const char *dirname)
 {
   if (icn_[ICN_FILE].svg) {
@@ -249,20 +221,18 @@ inline bool fltk_filetable_magic::refresh()
 
 bool fltk_filetable_magic::dir_up()
 {
-  if (!open_directory_) {
+  if (open_directory_.empty()) {
     return load_dir("..");
   }
 
-  if (strcmp(open_directory_, "/") == 0) {
+  if (open_directory_ == "/") {
     return false;
   }
 
-  size_t len = strlen(open_directory_);
-  char buf[len + 3];
-  strcpy(buf, open_directory_);
-  strcpy(buf + len, "/..");
+  std::string dir = open_directory_;
+  dir += "/..";
 
-  return load_dir(buf);
+  return load_dir(dir.c_str());
 }
 
 bool fltk_filetable_magic::filter_show_entry(const char *filename)
@@ -312,23 +282,19 @@ void fltk_filetable_magic::update_icons()
 Fl_SVG_Image *fltk_filetable_magic::icon_magic(fltk_filetable_Row r)
 {
   const char *p;
-  size_t len;
 
   // don't check 0 byte files
   if (!use_magic_ || r.bytes == 0) {
     return icn_[ICN_FILE].svg;
   }
 
-  if (!open_directory_) {
+  if (open_directory_.empty()) {
     p = magic_file_XX(cookie_, r.cols[COL_NAME]);
   } else {
-    len = strlen(open_directory_);
-    char tmp[len + strlen(r.cols[COL_NAME]) + 1];
-    strcpy(tmp, open_directory_);
-    tmp[len] = '/';
-    strcpy(tmp + len + 1, r.cols[COL_NAME]);
-
-    p = magic_file_XX(cookie_, tmp);
+    std::string file = open_directory_;
+    file.push_back('/');
+    file += r.cols[COL_NAME];
+    p = magic_file_XX(cookie_, file.c_str());
   }
 
   if (!p) {
@@ -336,25 +302,24 @@ Fl_SVG_Image *fltk_filetable_magic::icon_magic(fltk_filetable_Row r)
   }
 
   const char *type = NULL;
-  len = strlen(p);
 
   switch(p[0]) {
     case 'a':
       if (STR_BEGINS(p, "application/")) {
         // check for "application/" and "application/x-" string
-        char tmp[len + 2];
-        strcpy(tmp, "application/");
+        const char *p2 = p + sizeof("application/") - 1;
+        std::string tmp;
 
-        if (STR_BEGINS(p + 12, "x-")) {
-          strcpy(tmp + 12, p + 14);
+        if (STR_BEGINS(p2, "x-")) {
+          tmp = "application/";
+          tmp += p2 + 2;
         } else {
-          tmp[12] = 'x';
-          tmp[13] = '-';
-          strcpy(tmp + 14, p + 12);
+          tmp = "application/x-";
+          tmp += p2;
         }
 
-        for (auto l : icn_custom_) {
-          if (strstr(l.list, p) || strstr(l.list, tmp)) {
+        for (const auto l : icn_custom_) {
+          if (strstr(l.list, p) || strstr(l.list, tmp.c_str())) {
             return l.svg;
           }
         }
@@ -410,20 +375,18 @@ Fl_SVG_Image *fltk_filetable_magic::icon_magic(fltk_filetable_Row r)
   }
 
   // full check on other types than "application/"
-  char desc[len + 1];
-  strcpy(desc, p);
-  desc[len] = ';';
-  desc[len + 1] = 0;
+  std::string desc = p;
+  desc.push_back(';');
 
-  for (auto l : icn_custom_) {
-    if (strstr(l.list, desc)) {
+  for (const auto l : icn_custom_) {
+    if (strstr(l.list, desc.c_str())) {
       return l.svg;
     }
   }
 
   // generic MIME types (check last)
   if (type) {
-    for (auto l : icn_custom_) {
+    for (const auto l : icn_custom_) {
       if (strstr(l.list, type)) {
         return l.svg;
       }

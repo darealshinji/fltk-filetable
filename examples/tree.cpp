@@ -26,10 +26,6 @@
 #include <FL/Fl_Double_Window.H>
 
 #include "fltk_dirtree.hpp"
-#include "fltk_filetable_.hpp"
-
-#include "fltk_filetable_.cpp"
-#include "fltk_dirtree.cpp"
 
 #include "Folder_generic.svg.h"
 #include "Folder_noaccess.svg.h"
@@ -38,7 +34,7 @@
 
 static void myCallback(Fl_Widget *o, void *)
 {
-  fltk_dirtree *tr = dynamic_cast<fltk_dirtree *>(o);
+  fltk::dirtree *tr = dynamic_cast<fltk::dirtree *>(o);
 
   switch(tr->callback_reason()) {
     case FL_TREE_REASON_RESELECTED:
@@ -64,7 +60,7 @@ int main()
 
   Fl_Double_Window win(300, 600, "Tree");
 
-  fltk_dirtree tree(5, 5, win.w()-10, win.h()-10);
+  fltk::dirtree tree(5, 5, win.w()-10, win.h()-10);
   tree.callback(myCallback, NULL);
   tree.item_labelsize(16);
 

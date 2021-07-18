@@ -22,46 +22,51 @@
   SOFTWARE.
 */
 
-#ifndef fltk_fileselection_hpp
-#define fltk_fileselection_hpp
+#ifndef fltk_filetable_simple_hpp
+#define fltk_filetable_simple_hpp
 
 #include <FL/Fl.H>
-#include <FL/Fl_Group.H>
+#include <FL/Fl_SVG_Image.H>
+#include <cassert>
 
-#include "fltk_dirtree.hpp"
 #include "fltk_filetable_.hpp"
 
 
-namespace fltk
+class fltk_filetable_simple : public fltk_filetable_
 {
+public:
+  enum {
+    ICN_DIR,   // directory
+    ICN_FILE,  // regular file
+    ICN_LINK,  // symbolic link (overlay)
+    ICN_BLK,   // block device
+    ICN_CHR,   // character device
+    ICN_PIPE,  // FIFO/pipe
+    ICN_SOCK,  // socket
+    ICN_LAST
+  };
 
-class fileselection : public Fl_Group
-{
 private:
-  dirtree *tree_;
-  filetable_ *table_;
-  char *selection_;
+  typedef struct {
+    Fl_SVG_Image *svg;
+    bool alloc;
+  } svg_t;
+
+  svg_t icn_[ICN_LAST];
+
+  void double_click_callback();
+  Fl_SVG_Image *icon(fltk_filetable_Row r);
 
 public:
-  fileselection(int X, int Y, int W, int H, filetable_ *table, const char *L=NULL) : Fl_Group(X,Y,W,H,L)
-  {
-    table_ = table;
-    tree_ = NULL;  // TODO: add fltk_dirtree() sidebar
-    selection_ = NULL;
+  fltk_filetable_simple(int X, int Y, int W, int H, const char *L=NULL);
+  ~fltk_filetable_simple();
 
-    if (table_) {
-      table_->resize(X, Y, W, H);
-    }
-  }
+  bool load_dir(const char *dirname);
+  bool load_dir();
 
-  ~fileselection()
-  {
-    if (selection_) {
-      free(selection_);
-    }
-  }
+  bool set_icon(const char *filename, const char *data, int idx);
 };
 
-} // namespace fltk
+#endif  // fltk_filetable_simple_hpp
 
-#endif  // fltk_fileselection_hpp
+

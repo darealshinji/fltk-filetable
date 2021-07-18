@@ -22,46 +22,41 @@
   SOFTWARE.
 */
 
-#ifndef fltk_fileselection_hpp
-#define fltk_fileselection_hpp
+#ifndef xdg_dirs_hpp
+#define xdg_dirs_hpp
 
-#include <FL/Fl.H>
-#include <FL/Fl_Group.H>
-
-#include "fltk_dirtree.hpp"
-#include "fltk_filetable_.hpp"
+#include <stdio.h>
 
 
-namespace fltk
+class xdg
 {
+public:
+  enum {
+    DESKTOP = 0,
+    DOWNLOAD = 1,
+    DOCUMENTS = 2,
+    MUSIC = 3,
+    PICTURES = 4,
+    VIDEOS = 5,
+    LAST = 6
+  };
 
-class fileselection : public Fl_Group
-{
 private:
-  dirtree *tree_;
-  filetable_ *table_;
-  char *selection_;
+  char *home_dir;
+  char *dirs[LAST];
+  size_t home_len;
+
+  char *lookup(FILE *fp, const char *type);
 
 public:
-  fileselection(int X, int Y, int W, int H, filetable_ *table, const char *L=NULL) : Fl_Group(X,Y,W,H,L)
-  {
-    table_ = table;
-    tree_ = NULL;  // TODO: add fltk_dirtree() sidebar
-    selection_ = NULL;
+  xdg();
+  ~xdg();
 
-    if (table_) {
-      table_->resize(X, Y, W, H);
-    }
-  }
+  bool get();
 
-  ~fileselection()
-  {
-    if (selection_) {
-      free(selection_);
-    }
-  }
+  const char *home();
+  const char *dir(int type);
+  const char *basename(int type);
 };
 
-} // namespace fltk
-
-#endif  // fltk_fileselection_hpp
+#endif  // xdg_dirs_hpp

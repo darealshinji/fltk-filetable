@@ -23,15 +23,15 @@
 */
 
 #ifndef _GNU_SOURCE
-#define _GNU_SOURCE  // needed for AT_NO_AUTOMOUNT
+#define _GNU_SOURCE
 #endif
 #include <FL/Fl.H>
 #include <FL/Fl_Tree.H>
 #include <FL/Fl_Tree_Item.H>
 #include <FL/Fl_SVG_Image.H>
 #include <algorithm>
-#include <string>
 #include <vector>
+#include <string>
 #include <ctype.h>
 #include <dirent.h>
 #include <fcntl.h>
@@ -41,8 +41,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define DUMMY_ENTRY  NULL
-//#define DUMMY_ENTRY  "."
+#include "fltk_dirtree.hpp"
 
 
 // Sort class to handle sorting column using std::sort
@@ -96,12 +95,11 @@ fltk_dirtree::fltk_dirtree(int X, int Y, int W, int H, const char *L)
   connectorstyle(FL_TREE_CONNECTOR_SOLID);
 
   // start with closed root ("/") dir
-  add(root(), DUMMY_ENTRY);
+  add(root(), NULL);  // dummy entry
   close(root(), 0);
 }
 
-/* return the absolute path of an item, ignoring empty labels;
- * using std::string for convenience */
+/* return the absolute path of an item, ignoring empty labels */
 std::string fltk_dirtree::item_path(Fl_Tree_Item *ti)
 {
   std::string s;
@@ -123,17 +121,44 @@ std::string fltk_dirtree::item_path(Fl_Tree_Item *ti)
   return s;
 }
 
-/* return the path of the last selected item or NULL
- * if nothing was selected yet */
-const char *fltk_dirtree::callback_item_path()
+/*
+char *fltk_dirtree::item_path(Fl_Tree_Item *ti)
 {
-  callback_item_path_ = item_path(callback_item());
+  char *buf = NULL;
+  size_t len = 0;
 
-  if (callback_item_path_.empty()) {
-    return NULL;
+  if (ti->is_root()) {
+    return strdup("/");
   }
 
-  return callback_item_path_.c_str();
+  while (ti && !ti->is_root()) {
+    const char *l = ti->label();
+
+    if (l && *l != 0) {
+      size_t ls = strlen(l);
+      buf = reinterpret_cast<char *>(realloc(buf, len + ls + 2));
+      if (len > 0) memmove(buf + ls + 1, buf, len + 1);
+      memcpy(buf + 1, l, ls);
+      buf[0] = '/';
+      len += ls + 1;
+    }
+    ti = ti->parent();
+  }
+
+  if (buf) {
+    buf[len] = 0;
+  }
+
+  return buf;
+}
+*/
+
+/* return the path of the last selected item or NULL
+ * if nothing was selected yet */
+inline const char *fltk_dirtree::callback_item_path()
+{
+  callback_item_path_ = item_path(callback_item());
+  return callback_item_path_.empty() ? NULL : callback_item_path_.c_str();
 }
 
 /* a '+' sign was clicked */
@@ -158,7 +183,7 @@ inline void fltk_dirtree::close_callback_item()
   Fl_Tree_Item *ti = callback_item();
   ti->clear_children();
   close(ti, 0);
-  add(ti, DUMMY_ENTRY); // dummy entry so the plus sign appears
+  add(ti, NULL); // dummy entry so the plus sign appears
 }
 
 /* basically an SVG-only wrapper for the protected
@@ -290,7 +315,7 @@ bool fltk_dirtree::load_tree(Fl_Tree_Item *ti)
 
     sub->clear_children();
     close(sub, 0);
-    add(sub, DUMMY_ENTRY);
+    add(sub, NULL);  // dummy entry
 
     free(elem);
   }
@@ -334,7 +359,7 @@ bool fltk_dirtree::load_directory(const char *path)
     *p = '/';
   }
 
-  /* finally open the full simplified(!) path */
+  /* finally open the full simplified (!) path */
   rv = open(s);
   free(s);
 

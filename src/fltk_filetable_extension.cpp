@@ -49,51 +49,10 @@ fltk_filetable_extension::~fltk_filetable_extension()
     if (icn_custom_.back().svg) {
       delete icn_custom_.back().svg;
     }
-
-    // clear list
-    for (ext_t ext : icn_custom_.back().list) {
-      if (ext.str) {
-        delete ext.str;
-      }
-    }
-
-    while (icn_custom_.back().list.size() > 0) {
-      icn_custom_.back().list.pop_back();
-    }
-
-    icn_custom_.back().list.clear();
     icn_custom_.pop_back();
   }
 
   icn_custom_.clear();
-}
-
-void fltk_filetable_extension::double_click_callback()
-{
-  const char *name = rowdata_[last_row_clicked_].cols[COL_NAME];
-  char *buf = NULL;
-
-  if (open_directory_) {
-    size_t len = strlen(open_directory_);
-    const char *format = (open_directory_[len - 1] == '/') ? "%s%s" : "%s/%s";
-    buf = new char[len + strlen(name) + 1];
-    sprintf(buf, format, open_directory_, name);
-    name = buf;
-  }
-
-  if (rowdata_[last_row_clicked_].isdir()) {
-    if (!load_dir(name)) {
-      // refresh current directory if we cannot access
-      load_dir(NULL);
-    }
-  } else {
-    selection_ = strdup(name);
-    window()->hide();  // keep this?
-  }
-
-  if (buf) {
-    delete buf;
-  }
 }
 
 Fl_SVG_Image *fltk_filetable_extension::icon(fltk_filetable_Row r)
@@ -112,13 +71,13 @@ Fl_SVG_Image *fltk_filetable_extension::icon(fltk_filetable_Row r)
 
   size_t len = strlen(r.cols[COL_NAME]);
 
-  for (auto & icn : icn_custom_) {
-    for (auto & ext : icn.list) {
-      if (ext.size >= len) {
+  for (const auto & icn : icn_custom_) {
+    for (const auto & ext : icn.list) {
+      if (ext.size() >= len) {
         continue;
       }
 
-      if (strcasecmp(r.cols[COL_NAME] + (len - ext.size), ext.str) == 0) {
+      if (strcasecmp(r.cols[COL_NAME] + (len - ext.size()), ext.c_str()) == 0) {
         return icn.svg;
       }
     }
@@ -158,8 +117,8 @@ bool fltk_filetable_extension::set_icon(const char *filename, const char *data, 
 // make this like fltk_filetable_::add_filter() ??
 bool fltk_filetable_extension::set_icon(const char *filename, const char *data, const char *list, const char *delim)
 {
-  std::vector<ext_t> filter_list;
-  char *copy, *str, *tok;
+  std::vector<std::string> filter_list;
+  char *str, *tok;
   int i;
 
   if ((!filename && !data) || !list || !delim) {
@@ -176,28 +135,19 @@ bool fltk_filetable_extension::set_icon(const char *filename, const char *data, 
   svg->proportional = false;
   svg->resize(labelsize() + 4, labelsize() + 4);
 
-  copy = strdup(list);
+  char *copy = strdup(list);
 
   for (i = 1, str = copy; ; ++i, str = NULL) {
     if ((tok = strtok(str, delim)) == NULL) {
       break;
     }
 
-    // add to list
-    size_t len = strlen(tok);
-    char *buf = new char[len + 2];
+    std::string ext;
 
     if (tok[0] != '.') {
-      buf[0] = '.';
-      strcpy(buf + 1, tok);
-      len++;
-    } else {
-      strcpy(buf, tok);
+      ext = ".";
     }
-
-    ext_t ext;
-    ext.str = buf;
-    ext.size = len;
+    ext += tok;
 
     filter_list.push_back(ext);
   }

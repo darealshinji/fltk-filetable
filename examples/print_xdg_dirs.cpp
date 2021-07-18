@@ -26,8 +26,8 @@
 #include <vector>
 
 #include "xdg_dirs.hpp"
-#include "xdg_dirs.cpp"
- 
+
+
 static xdg paths;
 
 

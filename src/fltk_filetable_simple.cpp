@@ -36,7 +36,6 @@ fltk_filetable_simple::fltk_filetable_simple(int X, int Y, int W, int H, const c
     icn_[i].alloc = false;
   }
   svg_link_ = icn_[ICN_LINK].svg;
-  selection_ = NULL;
 }
 
 fltk_filetable_simple::~fltk_filetable_simple()
@@ -45,38 +44,6 @@ fltk_filetable_simple::~fltk_filetable_simple()
     if (icn_[i].alloc && icn_[i].svg) {
       delete icn_[i].svg;
     }
-  }
-
-  if (selection_) {
-    free(selection_);
-  }
-}
-
-void fltk_filetable_simple::double_click_callback()
-{
-  const char *name = rowdata_[last_row_clicked_].cols[COL_NAME];
-  char *buf = NULL;
-
-  if (open_directory_) {
-    size_t len = strlen(open_directory_);
-    const char *format = (open_directory_[len - 1] == '/') ? "%s%s" : "%s/%s";
-    buf = new char[len + strlen(name) + 1];
-    sprintf(buf, format, open_directory_, name);
-    name = buf;
-  }
-
-  if (rowdata_[last_row_clicked_].isdir()) {
-    if (!load_dir(name)) {
-      // refresh current directory if we cannot access
-      load_dir(NULL);
-    }
-  } else {
-    selection_ = strdup(name);
-    window()->hide();  // keep this?
-  }
-
-  if (buf) {
-    delete buf;
   }
 }
 

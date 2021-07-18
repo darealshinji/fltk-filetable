@@ -22,18 +22,22 @@
   SOFTWARE.
 */
 
-#ifndef fltk_filetable_extension_hpp
-#define fltk_filetable_extension_hpp
+#ifndef filetable_extension_hpp
+#define filetable_extension_hpp
 
 #include <FL/Fl.H>
 #include <FL/Fl_SVG_Image.H>
-#include <cassert>
+#include <string>
 #include <vector>
+#include <string.h>
 
 #include "fltk_filetable_.hpp"
 
 
-class fltk_filetable_extension : public fltk_filetable_
+namespace fltk
+{
+
+class filetable_extension : public filetable_
 {
 public:
   enum {
@@ -45,27 +49,152 @@ public:
 
 private:
   typedef struct {
-    std::vector<ext_t> list;
+    std::vector<std::string> list;
     Fl_SVG_Image *svg;
   } icn_t;
 
   Fl_SVG_Image *icn_[ICN_LAST];
   std::vector<icn_t> icn_custom_;
 
-  void double_click_callback();
-  Fl_SVG_Image *icon(fltk_filetable_Row r);
+  Fl_SVG_Image *icon(filetable_Row r)
+  {
+    if (r.isdir()) {
+      return icn_[ICN_DIR];
+    }
+
+    // check if filename has an extension
+    char *p = strrchr(r.cols[COL_NAME], '.');
+
+    // error || dot is first char || dot is last char
+    if (!p || p == r.cols[COL_NAME] || ++p == 0) {
+      return icn_[ICN_FILE];
+    }
+
+    size_t len = strlen(r.cols[COL_NAME]);
+
+    for (const auto & icn : icn_custom_) {
+      for (const auto & ext : icn.list) {
+        if (ext.size() >= len) {
+          continue;
+        }
+
+        if (strcasecmp(r.cols[COL_NAME] + (len - ext.size()), ext.c_str()) == 0) {
+          return icn.svg;
+        }
+      }
+    }
+
+    return icn_[ICN_FILE];
+  }
 
 public:
-  fltk_filetable_extension(int X, int Y, int W, int H, const char *L=NULL);
-  ~fltk_filetable_extension();
+  filetable_extension(int X, int Y, int W, int H, const char *L=NULL) : filetable_(X,Y,W,H,L)
+  {
+    icn_[ICN_DIR] = NULL;
+    icn_[ICN_FILE] = NULL;
+    icn_[ICN_LINK] = NULL;
+    svg_link_ = icn_[ICN_LINK];
+  }
 
-  bool set_icon(const char *filename, const char *data, int idx);
+  ~filetable_extension()
+  {
+    for (int i = 0; i < ICN_LAST; ++i) {
+      if (icn_[i]) {
+        delete icn_[i];
+      }
+    }
+
+    while (icn_custom_.size() > 0) {
+      if (icn_custom_.back().svg) {
+        delete icn_custom_.back().svg;
+      }
+      icn_custom_.pop_back();
+    }
+
+    icn_custom_.clear();
+  }
+
+  bool set_icon(const char *filename, const char *data, int idx)
+  {
+    if ((!filename && !data) || idx < 0 || idx >= ICN_LAST) {
+      return false;
+    }
+
+    if (icn_[idx]) {
+      delete icn_[idx];
+    }
+
+    icn_[idx] = new Fl_SVG_Image(filename, data);
+
+    if (icn_[idx]->fail()) {
+      delete icn_[idx];
+      icn_[idx] = NULL;
+      return false;
+    }
+
+    icn_[idx]->proportional = false;
+    icn_[idx]->resize(labelsize() + 4, labelsize() + 4);
+
+    if (idx == ICN_LINK) {
+      svg_link_ = icn_[ICN_LINK];
+    }
+
+    return true;
+  }
 
   // svg icon and list of file extensions separated by '/' and without dots
-  bool set_icon(const char *filename, const char *data, const char *list, const char *delim);
+  bool set_icon(const char *filename, const char *data, const char *list, const char *delim)
+  {
+    std::vector<std::string> filter_list;
+    char *str, *tok;
+    int i;
+
+    if ((!filename && !data) || !list || !delim) {
+      return false;
+    }
+
+    Fl_SVG_Image *svg = new Fl_SVG_Image(filename, data);
+
+    if (svg->fail()) {
+      delete svg;
+      return false;
+    }
+
+    svg->proportional = false;
+    svg->resize(labelsize() + 4, labelsize() + 4);
+
+    char *copy = strdup(list);
+
+    for (i = 1, str = copy; ; ++i, str = NULL) {
+      if ((tok = strtok(str, delim)) == NULL) {
+        break;
+      }
+
+      std::string ext;
+
+      if (tok[0] != '.') {
+        ext = ".";
+      }
+      ext += tok;
+
+      filter_list.push_back(ext);
+    }
+
+    free(copy);
+
+    icn_t icn;
+    icn.list = filter_list;
+    icn.svg = svg;
+    icn_custom_.push_back(icn);
+
+    return true;
+  }
 
 };
 
-#endif  // fltk_filetable_extension_hpp
+} // namespace fltk
+
+
+#endif  // filetable_extension_hpp
 
 
