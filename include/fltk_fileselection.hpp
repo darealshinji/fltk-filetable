@@ -27,6 +27,7 @@
 
 #include <FL/Fl.H>
 #include <FL/Fl_Group.H>
+#include <string>
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_.hpp"
@@ -40,25 +41,22 @@ class fileselection : public Fl_Group
 private:
   dirtree *tree_;
   filetable_ *table_;
-  char *selection_;
+  std::string selection_;
 
 public:
   fileselection(int X, int Y, int W, int H, filetable_ *table, const char *L=NULL) : Fl_Group(X,Y,W,H,L)
   {
     table_ = table;
-    tree_ = NULL;  // TODO: add fltk_dirtree() sidebar
-    selection_ = NULL;
+    tree_ = new dirtree(X, Y, W*0.2, H);
 
     if (table_) {
-      table_->resize(X, Y, W, H);
+      table_->resize(X + tree_->w(), Y, W - tree_->w(), H);
     }
   }
 
   ~fileselection()
   {
-    if (selection_) {
-      free(selection_);
-    }
+    if (tree_) delete tree_;
   }
 };
 

@@ -1,0 +1,10 @@
+/build
+/fltk
+/examples/fileselection
+/examples/listfiles_extension
+/examples/listfiles_magic
+/examples/listfiles_magic_dlopen
+/examples/listfiles_simple
+/examples/print_xdg_dirs
+/examples/tree
+/examples/user-dirs.dirs

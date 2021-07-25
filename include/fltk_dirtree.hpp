@@ -59,8 +59,11 @@ public:
     reverse_ = reverse;
   }
 
-  bool operator() (const char *ap, const char *bp)
+  bool operator() (const std::string &ap_, const std::string &bp_)
   {
+    const char *ap = ap_.c_str();
+    const char *bp = bp_.c_str();
+
     // skip first byte if it's '/' (directory instead of link to directory)
     if (*ap == '/') ap++;
     if (*bp == '/') bp++;
@@ -81,7 +84,7 @@ public:
       }
     }
 
-    // Alphabetic sort
+    // Alphabetic sort, case-insensitive
     return reverse_ ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
   }
 };
@@ -97,6 +100,30 @@ private:
 
   std::string callback_item_path_;
 
+  static void default_callback(Fl_Widget *w, void *)
+  {
+    dirtree *o = dynamic_cast<dirtree *>(w);
+
+    switch(o->callback_reason()) {
+      /*
+      case FL_TREE_REASON_RESELECTED:
+      case FL_TREE_REASON_SELECTED: {
+          const char *path = o->callback_item_path();
+          if (path) printf("%s\n", path);
+        }
+        break;
+      */
+      case FL_TREE_REASON_OPENED:
+        o->open_callback_item();
+        break;
+      case FL_TREE_REASON_CLOSED:
+        o->close_callback_item();
+        break;
+      default:
+        break;
+    }
+  }
+
   // return the absolute path of an item, ignoring empty labels
   std::string item_path(Fl_Tree_Item *ti)
   {
@@ -109,7 +136,7 @@ private:
     while (ti && !ti->is_root()) {
       const char *l = ti->label();
 
-      if (l && *l != 0) {
+      if (l && *l) {
         s.insert(0, l);
         s.insert(0, 1, '/');
       }
@@ -119,16 +146,58 @@ private:
     return s;
   }
 
+  // unfortunately Fl_Tree::item_labelsize() and Fl_Tree_Item::recalc_tree()
+  // don't update all the present labels with the new size;
+  // instead we get an array of currently open directories, close
+  // everything and open it up again
+  //
+  // return value is true if *ti was an open empty directory; this is used
+  // by the method when calling itself recursively
+  bool get_open_paths(Fl_Tree_Item *ti, std::vector<std::string> &vec)
+  {
+    if (!ti || (ti->children() > 0 && ti->child(0)->label() == NULL)) {
+      // item is NULL or isn't open
+      return false;
+    }
+
+    if (ti->children() == 0) {
+      // item is an open empty directory
+      vec.push_back(item_path(ti));
+      return true;
+    }
+
+    bool do_push_back = true;
+
+    for (int i = 0; i < ti->children(); ++i) {
+      auto child = ti->child(i);
+
+      if (do_push_back && child && child->children() > 0 && child->child(0)->label()) {
+        // child has children
+        do_push_back = false;
+      }
+
+      if (get_open_paths(child, vec)) {
+        // child is an open empty directory
+        do_push_back = false;
+      }
+    }
+
+    if (do_push_back) {
+      vec.push_back(item_path(ti));
+    }
+
+    return false;
+  }
+
 protected:
   // open a directory from a selected Fl_Tree_Item
   bool load_tree(Fl_Tree_Item *ti)
   {
     struct dirent *dir;
     DIR *d;
-    std::vector<char *> list;
+    std::vector<std::string> list;
 
-    std::string path = item_path(ti);
-    int fd = ::open(path.c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY);
+    int fd = ::open(item_path(ti).c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY);
 
     if (fd == -1) {
       return false;
@@ -157,20 +226,19 @@ protected:
         continue;
       }
 
+      const std::string sep("/");
+
       /* use first byte to identify entry as a link or directory */
       if (S_ISDIR(lst.st_mode)) {
         /* directory: entry begins with '/' */
-        char *buf = reinterpret_cast<char *>(malloc(strlen(dir->d_name) + 2));
-        buf[0] = '/';
-        strcpy(buf + 1, dir->d_name);
-        list.push_back(buf);
+        list.push_back(std::string(sep + dir->d_name));
       }
       else if (S_ISLNK(lst.st_mode) &&
                /* act like stat() */
                fstatat(fd, dir->d_name, &st, AT_NO_AUTOMOUNT) == 0 && S_ISDIR(st.st_mode))
       {
         /* link to directory: does NOT begin with '/' */
-        list.push_back(strdup(dir->d_name));
+        list.push_back(dir->d_name);
       }
     }
 
@@ -185,19 +253,17 @@ protected:
 
     std::stable_sort(list.begin(), list.end(), dirtree_Sort(sort_reverse()));
 
-    for (auto elem : list) {
-      add(ti, elem[0] == '/' ? elem + 1 : elem);
+    for (const std::string &elem : list) {
+      add(ti, elem.front() == '/' ? elem.c_str() + 1 : elem.c_str());
       Fl_Tree_Item *sub = ti->child(ti->has_children() ? ti->children() - 1 : 0);
 
-      if (elem[0] != '/' && icon_link_) {
+      if (elem.front() != '/' && icon_link_) {
         sub->usericon(icon_link_);
       }
 
       sub->clear_children();
       close(sub, 0);
       add(sub, NULL);  // dummy entry
-
-      free(elem);
     }
 
     return true;
@@ -219,10 +285,10 @@ public:
     root_label("/");
     item_reselect_mode(FL_TREE_SELECTABLE_ALWAYS);
     connectorstyle(FL_TREE_CONNECTOR_SOLID);
+    callback(default_callback, NULL);
 
-    // start with closed root ("/") dir
-    add(root(), NULL);  // dummy entry
     close(root(), 0);
+    add(root(), NULL);  // dummy entry; alternatively call load_root()
   }
 
   virtual ~dirtree() {}
@@ -263,10 +329,10 @@ public:
   // load a directory from a given path
   bool load_directory(const char *path)
   {
-    char *s, *p;
+    char *simp, *p;
     bool rv;
 
-    if (!path || path[0] == 0) {
+    if (!path || *path == 0) {
       return false;
     }
 
@@ -274,31 +340,26 @@ public:
       return load_root();
     }
 
-    if ((s = filetable_::simplify_directory_path(path)) == NULL) {
+    if ((simp = filetable_::simplify_directory_path(path)) == NULL) {
       /* fallback */
-      s = strdup(path);
+      simp = strdup(path);
     }
-    p = s;
+    p = simp;
+    //printf("DEBUG: open -> %s\n", simp);
 
-    open(root());
+    load_root();
 
+    /* open subdirectories step by step */
     while (*++p) {
-      if (*p != '/') {
-        continue;
-      }
+      if (*p != '/') continue;
       *p = 0;
-
-      if (*s && !open(s)) {
-        free(s);
-        return false;
-      }
-
+      open(simp);
       *p = '/';
     }
 
-    /* finally open the full simplified (!) path */
-    rv = open(s);
-    free(s);
+    /* finally open the full path */
+    rv = open(simp);
+    free(simp);
 
     return rv;
   }
@@ -366,9 +427,28 @@ public:
     if (icon_locked_) {
       icon_locked_->resize(i, i);
     }
+
+    if (!root()->is_open()) {
+      return;
+    }
+
+    std::vector<std::string> vec;
+    get_open_paths(root(), vec);
+
+    // close everything
+    close(root(), 0);
+    add(root(), NULL); // unneeded?
+
+    // reopen directories
+    for (const std::string &elem : vec) {
+      //printf("DEBUG: reopening -> %s\n", elem.c_str());
+      load_directory(elem.c_str());
+    }
+
+    recalc_tree(); // unneeded?
   }
 
-  Fl_Fontsize item_labelsize() { return Fl_Tree::item_labelsize(); }
+  Fl_Fontsize item_labelsize() const { return Fl_Tree::item_labelsize(); }
 
   void show_hidden(bool b) { show_hidden_ = b; }
   bool show_hidden() const { return show_hidden_; }

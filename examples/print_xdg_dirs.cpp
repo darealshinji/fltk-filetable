@@ -41,7 +41,7 @@ int main()
   }
 
   printf("Home: %s\n", paths.home());
-  printf("%s: %s\n", paths.basename(xdg::DESKTOP), paths.dir(xdg::DESKTOP));
+  printf("%s: %s\n\n", paths.basename(xdg::DESKTOP), paths.dir(xdg::DESKTOP));
 
   for (int i = 0; i < xdg::LAST; ++i) {
     if (i != xdg::DESKTOP && paths.dir(i)) {
@@ -60,7 +60,9 @@ int main()
   );
 
   for (auto e : vec) {
-    printf("%s: %s\n", paths.basename(e), paths.dir(e));
+    if (strcmp(paths.home(), paths.dir(e)) != 0 && strncmp(paths.home(), paths.dir(e), paths.home_length()) == 0) {
+      printf("%s: %s\n", paths.basename(e), paths.dir(e));
+    }
   }
 
   return 0;

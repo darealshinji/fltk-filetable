@@ -32,22 +32,22 @@
 #include "Folder_link.svg.h"
 
 
-static void myCallback(Fl_Widget *o, void *)
+static void myCallback(Fl_Widget *w, void *)
 {
-  fltk::dirtree *tr = dynamic_cast<fltk::dirtree *>(o);
+  fltk::dirtree *o = dynamic_cast<fltk::dirtree *>(w);
 
-  switch(tr->callback_reason()) {
+  switch(o->callback_reason()) {
     case FL_TREE_REASON_RESELECTED:
     case FL_TREE_REASON_SELECTED: {
-        const char *path = tr->callback_item_path();
+        const char *path = o->callback_item_path();
         if (path) printf("%s\n", path);
       }
       break;
     case FL_TREE_REASON_OPENED:
-      tr->open_callback_item();
+      o->open_callback_item();
       break;
     case FL_TREE_REASON_CLOSED:
-      tr->close_callback_item();
+      o->close_callback_item();
       break;
     default:
       break;
@@ -56,13 +56,11 @@ static void myCallback(Fl_Widget *o, void *)
 
 int main()
 {
-  const char *dir = NULL;
-
   Fl_Double_Window win(300, 600, "Tree");
 
   fltk::dirtree tree(5, 5, win.w()-10, win.h()-10);
   tree.callback(myCallback, NULL);
-  tree.item_labelsize(16);
+  //tree.item_labelsize(16);
 
   Fl_SVG_Image icon(NULL, folder_generic_svg);
   Fl_SVG_Image icon_link(NULL, folder_link_svg);
@@ -72,15 +70,12 @@ int main()
   tree.usericon_link(&icon_link);
   tree.usericon_locked(&icon_locked);
 
-  dir = "/boot/grub/../grub/fonts/////";
-  //dir = ".";
+  tree.load_directory("/boot/grub/../grub/fonts/////");
+  tree.load_directory(".");
+  tree.load_directory("../fltk");
+  tree.load_directory("/var");
 
-  if (tree.load_directory(dir)) {
-    printf("TRUE\n");
-  } else {
-    printf("FALSE\n");
-    tree.load_root();
-  }
+  tree.item_labelsize(16);  // reopens all open tree items
 
   win.end();
   win.resizable(tree);

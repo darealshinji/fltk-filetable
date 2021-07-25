@@ -39,7 +39,7 @@ int main()
   table.load_dir("/");
 
   win.end();
-  win.resizable(table);
+  win.resizable(sel);
   win.show();
 
   return Fl::run();
