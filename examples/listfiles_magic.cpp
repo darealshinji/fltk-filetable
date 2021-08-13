@@ -69,46 +69,38 @@ int main()
 {
   Fl_Double_Window win(900, 500, "Test");
 
-    fltk::filetable_magic table(MARGIN, MARGIN, win.w()-MARGIN*2, win.h()-40-MARGIN*2);
-    table.autowidth_max(table.w()/2);
-    table.double_click_timeout(0.5);
-    table.labelfont(FL_HELVETICA);
-    table.labelsize(16);
+  fltk::filetable_magic table(MARGIN, MARGIN, win.w()-MARGIN*2, win.h()-40-MARGIN*2);
+  table.autowidth_max(table.w()/2);
+  table.double_click_timeout(0.5);
+  table.labelfont(FL_HELVETICA);
+  table.labelsize(16);
+  table.load_default_icons();
+  //table.add_filter(".cpp");
 
-    //table.add_filter(".cpp");
+  table.set_icon(NULL, file_pdf_svg, "application/x-pdf;");
+  table.set_icon(NULL, file_text_svg, "text");
+  table.set_icon(NULL, file_image_3_svg, "application/x-pdf;image");
+  table.set_icon(NULL, file_video_svg, "video;");
+  table.set_icon(NULL, file_audio_2_svg, "audio");
+  table.set_icon(NULL, file_archive_svg, "APPlication/zip;application/x-7z-compressed");
 
-    table.set_icon(NULL, folder_generic_svg, fltk::filetable_magic::ICN_DIR);
-    table.set_icon(NULL, file_generic_svg, fltk::filetable_magic::ICN_FILE);
-    table.set_icon(NULL, file_device_svg, fltk::filetable_magic::ICN_CHR);
-    table.set_icon(NULL, file_device_svg, fltk::filetable_magic::ICN_BLK);
-    table.set_icon(NULL, file_pipe_svg, fltk::filetable_magic::ICN_PIPE);
-    table.set_icon(NULL, file_pipe_svg, fltk::filetable_magic::ICN_SOCK);
-    table.set_icon(NULL, overlay_link_svg, fltk::filetable_magic::ICN_LINK);
+  //table.load_dir("/home/");
+  table.load_dir();
 
-    table.set_icon(NULL, file_pdf_svg, "application/x-pdf;");
-    table.set_icon(NULL, file_text_svg, "text");
-    table.set_icon(NULL, file_image_3_svg, "application/x-pdf;image");
-    table.set_icon(NULL, file_video_svg, "video;");
-    table.set_icon(NULL, file_audio_2_svg, "audio");
-    table.set_icon(NULL, file_archive_svg, "APPlication/zip;application/x-7z-compressed");
+  Fl_Button up(MARGIN, table.h() + MARGIN*2-10, 40, 36, "Up");
+  up.callback(up_cb, &table);
 
-    //table.load_dir("/home/");
-    table.load_dir();
+  Fl_Button refresh(up.x()+up.w()+MARGIN/2, up.y(), 64, 36, "Refresh");
+  refresh.callback(refresh_cb, &table);
 
-    Fl_Button up(MARGIN, table.h() + MARGIN*2-10, 40, 36, "Up");
-    up.callback(up_cb, &table);
-
-    Fl_Button refresh(up.x()+up.w()+MARGIN/2, up.y(), 64, 36, "Refresh");
-    refresh.callback(refresh_cb, &table);
-
-    Fl_Button hidden(refresh.x()+refresh.w()+MARGIN/2, up.y(), 110, 36, "Toggle hidden");
-    hidden.callback(hidden_cb, &table);
+  Fl_Button hidden(refresh.x()+refresh.w()+MARGIN/2, up.y(), 110, 36, "Toggle hidden");
+  hidden.callback(hidden_cb, &table);
 
   win.end();
   win.resizable(table);
   win.show();
 
-  //Fl::lock();
+  Fl::lock();
 
   int rv = Fl::run();
 

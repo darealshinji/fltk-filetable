@@ -1,6 +1,9 @@
 /*
   Copyright (c) 2021 djcj <djcj@gmx.de>
 
+  The icons used are
+  Copyright (c) 2007-2020 Haiku, Inc.
+
   Permission is hereby granted, free of charge, to any person
   obtaining a copy of this software and associated documentation files
   (the "Software"), to deal in the Software without restriction,
@@ -58,15 +61,10 @@
 namespace fltk
 {
 
-// forward declaration
-class dirtree;
-
-// single row of columns
-class filetable_Row
+class filetable_ : public Fl_Table_Row
 {
 private:
-  char _type;
-  bool _lnk, _sel;
+  friend class dirtree;
 
 public:
   // columns
@@ -77,117 +75,123 @@ public:
     COL_MAX = 3
   };
 
-  char *cols[COL_MAX];
-  Fl_SVG_Image *svg;
-  long bytes, last_mod;
+protected:
+  enum {
+    ICN_DIR,   // directory
+    ICN_FILE,  // regular file
+    ICN_LINK,  // symbolic link (overlay)
+    ICN_LOCK,  // "no access" overlay icon
+    ICN_BLK,   // block device
+    ICN_CHR,   // character device
+    ICN_PIPE,  // FIFO/pipe
+    ICN_SOCK,  // socket
+    ICN_LAST
+  };
 
-  filetable_Row()
+  // single row of columns
+  class Row
   {
-    _type = 0;
-    _lnk = false;
-    _sel = false;
-    bytes = 0;
-    last_mod = 0;
-    svg = NULL;
+  private:
+    char _type;
+    bool _lnk, _sel;
 
-    for (int i = 0; i < COL_MAX; ++i) {
-      cols[i] = NULL;
-    }
-  }
+  public:
+    char *cols[COL_MAX];
+    Fl_SVG_Image *svg;
+    long bytes, last_mod;
 
-  virtual ~filetable_Row() {}
+    Row()
+    {
+      _type = 0;
+      _lnk = false;
+      _sel = false;
+      bytes = 0;
+      last_mod = 0;
+      svg = NULL;
 
-  bool selected() const { return _sel; }
-  void setselected() { _sel = true; }
-  void setunselected() { _sel = false; }
-
-  char type() const { return _type; }
-  void type(char c) { _type = c; }
-
-  bool isdir() { return (_type == 'D'); }
-
-  bool islnk() const { return _lnk; }
-  void setlnk() { _lnk = true; }
-};
-
-// Sort class to handle sorting column using std::sort
-class filetable_Sort {
-  int _col, _reverse;
-
-public:
-  filetable_Sort(int col, int reverse) {
-    _col = col;
-    _reverse = reverse;
-  }
-
-  bool operator() (filetable_Row a, filetable_Row b) {
-    const char *ap = (_col < filetable_Row::COL_MAX) ? a.cols[_col] : "";
-    const char *bp = (_col < filetable_Row::COL_MAX) ? b.cols[_col] : "";
-
-    if (a.isdir() != b.isdir()) {
-      return (a.isdir() && !b.isdir());
-    }
-    else if (_col == filetable_Row::COL_SIZE) {
-      long as = a.bytes;
-      long bs = b.bytes;
-      return _reverse ? as < bs : bs < as;
-    }
-    else if (_col == filetable_Row::COL_LAST_MOD) {
-      long am = a.last_mod;
-      long bm = b.last_mod;
-      return _reverse ? am < bm : bm < am;
-    }
-    else if (isdigit(*ap) && isdigit(*bp)) {
-      // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
-      long av = atol(ap);
-      long bv = atol(bp);
-
-      // if numbers are the same, continue to alphabetic sort
-      if (av != bv) {
-        return _reverse ? bv < av : av < bv;
+      for (int i = 0; i < COL_MAX; ++i) {
+        cols[i] = NULL;
       }
     }
 
-    // ignore leading dots in filenames ("bin, .config, data, .local"
-    // instead of ".config, .local, bin, data")
-    if (_col == filetable_Row::COL_NAME) {
-      if (*ap == '.') { ap++; }
-      if (*bp == '.') { bp++; }
-    }
+    bool selected() const { return _sel; }
+    void setselected() { _sel = true; }
+    void setunselected() { _sel = false; }
 
-    // Alphabetic sort
-    return _reverse ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
-  }
-};
+    char type() const { return _type; }
+    void type(char c) { _type = c; }
 
-class filetable_ : public Fl_Table_Row
-{
-private:
-  friend class dirtree;
+    bool isdir() const { return (_type == 'D'); }
 
-public:
-  // columns
-  enum {
-    COL_NAME = filetable_Row::COL_NAME,
-    COL_SIZE = filetable_Row::COL_SIZE,
-    COL_LAST_MOD = filetable_Row::COL_LAST_MOD,
-    COL_MAX = filetable_Row::COL_MAX
+    bool islnk() const { return _lnk; }
+    void setlnk() { _lnk = true; }
   };
 
 private:
-  int sort_reverse_;
-  int sort_last_row_;
-  double dc_timeout_;
-  int autowidth_padding_;
-  int autowidth_max_;
-  bool show_hidden_;
+  // Sort class to handle sorting column using std::sort
+  class sort {
+    int _col, _reverse;
+
+  public:
+    sort(int col, int reverse) {
+      _col = col;
+      _reverse = reverse;
+    }
+
+    bool operator() (Row a, Row b) {
+      const char *ap = (_col < COL_MAX) ? a.cols[_col] : "";
+      const char *bp = (_col < COL_MAX) ? b.cols[_col] : "";
+
+      if (a.isdir() != b.isdir()) {
+        return (a.isdir() && !b.isdir());
+      }
+      else if (_col == COL_SIZE) {
+        long as = a.bytes;
+        long bs = b.bytes;
+        return _reverse ? as < bs : bs < as;
+      }
+      else if (_col == COL_LAST_MOD) {
+        long am = a.last_mod;
+        long bm = b.last_mod;
+        return _reverse ? am < bm : bm < am;
+      }
+
+      // ignore leading dots in filenames ("bin, .config, data, .local"
+      // instead of ".config, .local, bin, data")
+      if (_col == COL_NAME) {
+        if (*ap == '.') ap++;
+        if (*bp == '.') bp++;
+      }
+
+      if (isdigit(*ap) && isdigit(*bp)) {
+        // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
+        long av = atol(ap);
+        long bv = atol(bp);
+
+        // if numbers are the same, continue to alphabetic sort
+        if (av != bv) {
+          return _reverse ? bv < av : av < bv;
+        }
+      }
+
+      // Alphabetic sort
+      return _reverse ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
+    }
+  };
+
+  int sort_reverse_ = 0;
+  int sort_last_row_ = 0;
+  double dc_timeout_ = 0.8;
+  int autowidth_padding_ = 20;
+  int autowidth_max_ = 0;
+  bool show_hidden_ = false;
   std::vector<std::string> filter_list_;
 
   Fl_SVG_Image *icon_square_[2];
   const char *label_header_[COL_MAX];
 
   // extra width for icons
-  int col_name_extra_w() {
+  int col_name_extra_w() const {
     return labelsize() + 10;
   }
 
@@ -227,16 +231,234 @@ private:
     within_double_click_timelimit_ = false;
   }
 
-  // unused!!
-  Fl_Callback *double_click_callback_;
-
 protected:
   std::string open_directory_;
   std::string selection_;
-  std::vector<filetable_Row> rowdata_;
-  int last_row_clicked_;
-  Fl_SVG_Image *svg_link_;
-  Fl_SVG_Image *svg_overlay_;
+  std::vector<Row> rowdata_;
+  int last_row_clicked_ = -1;
+  Fl_SVG_Image *svg_link_ = NULL;
+  Fl_SVG_Image *svg_noaccess_ = NULL;
+
+  bool empty(const char *val) {
+    return (!val || *val == 0) ? true : false;
+  }
+
+  // return a generic SVG icon by idx/enum
+  static const char *default_icon_data(int idx)
+  {
+    // Icons were taken from https://git.haiku-os.org/haiku/tree/data/artwork/icons
+    // exported to SVG, minimized with Scour and manually edited
+    // (scour --no-renderer-workaround --strip-xml-prolog --remove-descriptive-elements --enable-comment-stripping
+    //  --disable-embed-rasters --indent=none --strip-xml-space --enable-id-stripping --shorten-ids)
+
+    const char *svg_data_folder_generic =
+    "<svg width='64' height='64'>"
+      "<path d='m42 61h6l4-4h4l6-6-14-4-6 14z' fill='#010101' fill-opacity='.396'/>"
+      "<path d='m3 15 10 26 29 18 18-47-12-2-4 2-18-4-2 5-8-2-.09 8.2-12.91-4.2z' fill='none' stroke='#000' stroke-width='4'/>"
+      "<linearGradient id='d' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#face79' offset='0'/>"
+        "<stop stop-color='#bc4105' offset='1'/>"
+      "</linearGradient>"
+      "<path d='m26 8-12 33 28 17 18-46-12-2-4 2-18-4z' fill='url(#d)'/>"
+      "<linearGradient id='c' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#fff' offset='0'/>"
+        "<stop stop-color='#8e8e8e' offset='1'/>"
+      "</linearGradient>"
+      "<path d='m16 11v30l26 16 7-35-33-11z' fill='url(#c)'/>"
+      "<linearGradient id='b' x1='78.34' x2='101.46' y1='-26.66' y2='12.94' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#9a9a9a' offset='0'/>"
+        "<stop stop-color='#505050' offset='1'/>"
+      "</linearGradient>"
+      "<path d='M16 11L49 22L42 57L52 20.37L16 11z' fill='url(#b)'/>"
+      "<linearGradient id='a' x1='88.52' x2='97.54' y1='9.59' y2='51.29' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#ffe2ac' offset='0'/>"
+        "<stop stop-color='#f49806' offset='1'/>"
+      "</linearGradient>"
+      "<path d='m3 15 10 26 29 18-4-29-35-15z' fill='url(#a)'/>"
+      "<path d='M3 15L38 30L42 59L40.5 28L3 15z' fill='#a03d03'/>"
+    "</svg>";
+
+    const char *svg_data_file_generic =
+    "<svg width='64' height='64'>"
+      "<path d='m27 57 2 2 3.13-3.17 4.87 3.17 8.39-11.46 18.61-9.54-5-3 2 2-25 12-9 8zm31-23 4-3-4-2-3 3 3 2z' fill='#010101' fill-opacity='.5725'/>"
+      "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='none' stroke='#010101' stroke-width='4'/>"
+      "<radialGradient id='b' cx='0' cy='0' r='64' gradientTransform='matrix(.5714 0 0 .3333 26 35)' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#c0d5ff' offset='1'/>"
+        "<stop stop-color='#896eff' offset='.4886'/>"
+      "</radialGradient>"
+      "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='url(#b)'/>"
+      "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+        "fill='none' stroke='#010101' stroke-width='4'/>"
+      "<linearGradient id='a' x1='105.45' x2='119.92' y1='-23.42' y2='34.32' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#a5b1ff' offset='0'/>"
+        "<stop stop-color='#eaf1ff' offset='.7386'/>"
+        "<stop stop-color='#b3b8ff' offset='1'/>"
+      "</linearGradient>"
+      "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+        "fill='url(#a)'/>"
+    "</svg>";
+
+    const char *svg_data_file_device =
+    "<svg width='64' height='64'>"
+      "<path d='m27 57 2 2 3.13-3.17 4.87 3.17 8.39-11.46 18.61-9.54-5-3 2 2-25 12-9 8zm31-23 4-3-4-2-3 3 3 2z' fill='#010101' fill-opacity='.5725'/>"
+      "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='none' stroke='#010101' stroke-width='4'/>"
+      "<radialGradient id='g' cx='0' cy='0' r='64' gradientTransform='matrix(.5714 0 0 .3333 26 35)' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#c0d5ff' offset='1'/>"
+        "<stop stop-color='#896eff' offset='.4886'/>"
+      "</radialGradient>"
+      "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='url(#g)'/>"
+      "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+        "fill='none' stroke='#010101' stroke-width='4'/>"
+      "<linearGradient id='f' x1='105.45' x2='119.92' y1='-23.42' y2='34.32' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#a5b1ff' offset='0'/>"
+        "<stop stop-color='#eaf1ff' offset='.7386'/>"
+        "<stop stop-color='#b3b8ff' offset='1'/>"
+      "</linearGradient>"
+      "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+        "fill='url(#f)'/>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m38 60h6l-4-2 24-24v-5h-2l-3 2-4 3-11-4 1-2-23-11-18 19 34 17v7z' "
+        "fill='#010000' fill-opacity='.4196'/>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m38 60h6l-4-2 24-24v-5h-2l-3 2-4 3-11-4 1-2-23-11-18 19 34 17v7z' "
+        "fill='#010000' fill-opacity='.4196'/>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='M4 32L40 50L56 34L49.93 31.13L48 33L38 28L40.21 26.56L22 18L4 32z' "
+        "fill='none' stroke='#010101' stroke-linecap='square' stroke-width='4'/>"
+      "<linearGradient id='e' x1='41.93' x2='57.8' y1='7.25' y2='35.03' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#a3d444' offset='.0039'/>"
+        "<stop stop-color='#70a804' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='M4 32L40 50L56 34L49.93 31.13L48 33L38 28L40.21 26.56L22 18L4 32z' fill='url(#e)'/>"
+      "<linearGradient id='d' x1='48.17' x2='58.29' y1='5.64' y2='35.99' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#fff2ac' offset='.0039'/>"
+        "<stop stop-color='#ffd805' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m23 20-14 12 14 7 3-2 15 8m-15-24-7 6 11 7-1 1 14 8m-14-20-11 10 4 2 10-10m4 "
+        "2-3 3 2 4-3 4 3 2 5-6 8 4' fill='none' stroke='url(#d)' stroke-width='2'/>"
+      "<linearGradient id='a' x1='35.74' x2='37.78' y1='21.92' y2='31.28' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#717171' offset='0'/>"
+        "<stop stop-color='#010101' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m23 26 8 4-5 5-8-4 5-5z' fill='url(#a)'/>"
+      "<path transform='matrix(.6924 0 0 .6924 10.295 6.0948)' d='m23 26 8 4-5 5-8-4 5-5z' fill='url(#a)'/>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m34 56 4 2v-2s-1.6-1.4-2-2l22-22c0-1 2-4 2-4v-2s-2 1-2 0l-24 22v8z' "
+        "fill='none' stroke='#010101' stroke-linecap='square' stroke-width='4'/>"
+      "<linearGradient id='c' x1='15.86' x2='45.6' y1='64.94' y2='17.74' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#0c0c0c' offset='0'/>"
+        "<stop stop-color='#797979' offset='.3686'/>"
+        "<stop stop-color='#c6c6c6' offset='.647'/>"
+        "<stop stop-color='#a2a2a2' offset='.7882'/>"
+        "<stop stop-color='#e8e8e8' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m34 56 24-24c0-1 3-5 3-5v-2s-3 2-3 1l-24 22v8z' fill='url(#c)'/>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m34 48 4 2v2s-2-1-2 1 2 3 2 3-1-1-1-2 3-4 3-4v-2l-6-2v2z' fill='#010101'/>"
+      "<linearGradient id='b' x1='44.73' x2='50.41' y1='40.53' y2='50.57' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#d3d3d3' offset='0'/>"
+        "<stop stop-color='#a9a9a9' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m34 48 4 2v2s-2-1-2 1 2 3 2 3v2l-4-2v-8z' fill='url(#b)'/>"
+      "<path transform='matrix(.8902 0 0 .8902 -1.9706 -5.2808)' d='m45 44 3-3v-4l-3 3v4z' fill='#010101'/>"
+    "</svg>";
+
+    const char *svg_data_file_pipe =
+    "<svg width='64' height='64'>"
+      "<path d='m27 57 2 2 3.13-3.17 4.87 3.17 8.39-11.46 18.61-9.54-5-3 2 2-25 12-9 8zm31-23 4-3-4-2-3 3 3 2z' fill='#010101' fill-opacity='.5725'/>"
+      "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='none' stroke='#010101' stroke-width='4'/>"
+      "<radialGradient id='e' cx='0' cy='0' r='64' gradientTransform='matrix(.5714 0 0 .3333 26 35)' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#c0d5ff' offset='1'/>"
+        "<stop stop-color='#896eff' offset='.4886'/>"
+      "</radialGradient>"
+      "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='url(#e)'/>"
+      "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+        "fill='none' stroke='#010101' stroke-width='4'/>"
+      "<linearGradient id='d' x1='105.45' x2='119.92' y1='-23.42' y2='34.32' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#a5b1ff' offset='0'/>"
+        "<stop stop-color='#eaf1ff' offset='.7386'/>"
+        "<stop stop-color='#b3b8ff' offset='1'/>"
+      "</linearGradient>"
+      "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+        "fill='url(#d)'/>"
+      "<path d='m36 44h9c7 0 12-6 8-8l-11-5' fill-opacity='.6901'/>"
+      "<path transform='translate(0 7)' d='m33 30c3.91 0 7 1.31 7 3 0 1.67-3.09 3-7 3-3.93 0-7-1.33-7-3 0-1.69 3.07-3 7-3z' "
+        "fill='none' stroke='#000' stroke-width='6'/>"
+      "<path transform='translate(0 3)' d='m33 30c3.91 0 7 1.31 7 3 0 1.67-3.09 3-7 3-3.93 0-7-1.33-7-3 0-1.69 3.07-3 7-3z' "
+        "fill='none' stroke='#000' stroke-width='6'/>"
+      "<path transform='translate(0 -1)' d='m33 30c3.91 0 7 1.31 7 3 0 1.67-3.09 3-7 3-3.93 0-7-1.33-7-3 0-1.69 3.07-3 7-3z' "
+        "fill='none' stroke='#000' stroke-width='6'/>"
+      "<radialGradient id='a' cx='0' cy='0' r='64' gradientTransform='matrix(.3241 .1144 -.1144 .3241 26.292 -7.0357)' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#40e905' offset='.7568'/>"
+        "<stop stop-color='#04b300' offset='1'/>"
+      "</radialGradient>"
+      "<path transform='matrix(.7272 0 0 1.625 9 23.25)' d='m33 6c6.15 0 11 1.74 11 4 0 2.23-4.85 4-11 4-6.17 0-11-1.77-11-4 0-2.26 "
+        "4.83-4 11-4zm-11 0h22v4h-22v-4z' fill='url(#a)'/>"
+      "<path transform='translate(0 19)' d='m33 6c6.15 0 11 1.74 11 4 0 2.23-4.85 4-11 4-6.17 0-11-1.77-11-4 0-2.26 4.83-4 11-4zm-11 "
+        "0h22v4h-22v-4z' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round' stroke-width='4'/>"
+      "<path transform='translate(0 15)' d='m33 6c6.15 0 11 1.74 11 4 0 2.23-4.85 4-11 4-6.17 0-11-1.77-11-4 0-2.26 4.83-4 11-4z' "
+        "fill='none' stroke='#000' stroke-width='4'/>"
+      "<path transform='translate(0 19)' d='m33 6c6.15 0 11 1.74 11 4 0 2.23-4.85 4-11 4-6.17 0-11-1.77-11-4 0-2.26 4.83-4 11-4zm-11 "
+        "0h22v4h-22v-4z' fill='url(#a)'/>"
+      "<linearGradient id='c' x1='38.34' x2='48.77' y1='-4.73' y2='5.26' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#9cff79' offset='0'/>"
+        "<stop stop-color='#25e400' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='translate(0 15)' d='m33 6c6.15 0 11 1.74 11 4 0 2.23-4.85 4-11 4-6.17 0-11-1.77-11-4 0-2.26 4.83-4 11-4z' fill='url(#c)'/>"
+      "<linearGradient id='b' x1='38.34' x2='48.77' y1='-4.73' y2='5.26' gradientUnits='userSpaceOnUse'>"
+        "<stop stop-color='#b3ffe8' offset='0'/>"
+        "<stop stop-color='#89ffb2' offset='1'/>"
+      "</linearGradient>"
+      "<path transform='translate(0 15)' d='m33 13c6 0 11-2 11-3 0 2.23-4.85 4-11 4-6.17 0-11-1.77-11-4 0 1 5 3 11 3z' fill='url(#b)'/>"
+      "<path transform='matrix(2.6666,0,0,2.5,-55,4.5)' d='m33 7c1.67 0 3 .43 3 1 0 .55-1.33 1-3 1-1.69 0-3-.45-3-1 0-.57 1.31-1 3-1z' fill-opacity='.8823'/>"
+    "</svg>";
+
+    const char *svg_data_overlay_link =
+    "<svg width='64' height='64'>"
+      "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' "
+        "fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.6416'/>"
+      "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' "
+        "fill='#0ff' stroke-width='.69364'/>"
+    "</svg>";
+
+    const char *svg_data_overlay_lock =
+    "<svg width='64' height='64'>"
+      "<defs>"
+        "<linearGradient id='b' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse'>"
+          "<stop stop-color='#face79' offset='0'/>"
+          "<stop stop-color='#bc4105' offset='1'/>"
+        "</linearGradient>"
+        "<linearGradient id='a' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse'>"
+          "<stop stop-color='#fff' offset='0'/>"
+          "<stop stop-color='#8e8e8e' offset='1'/>"
+        "</linearGradient>"
+      "</defs>"
+      "<g transform='matrix(1.0184 0 0 1.0184 -1.1056 -.81075)'>"
+        "<path transform='matrix(1 0 0 .9473 0 3.2114)' d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='none' stroke='#000' stroke-width='4'/>"
+        "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='#000' stroke-width='8'/>"
+        "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='url(#b)' stroke-width='4'/>"
+        "<path d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='url(#a)'/>"
+        "<path d='m50 49c-1 0-2 1-2 2s0 1 1 2c0 2 0 3 1 3s1-1 1-3c1-1 1-1 1-2s-1-2-2-2z'/>"
+        "<path d='m40 44h20' fill='none' stroke='#000'/>"
+      "</g>"
+    "</svg>";
+
+    switch (idx) {
+      case ICN_DIR:
+        return svg_data_folder_generic;
+      case ICN_FILE:
+        return svg_data_file_generic;
+      case ICN_LINK:
+        return svg_data_overlay_link;
+      case ICN_LOCK:
+        return svg_data_overlay_lock;
+      case ICN_BLK:
+      case ICN_CHR:
+        return svg_data_file_device;
+      case ICN_SOCK:
+      case ICN_PIPE:
+        return svg_data_file_pipe;
+      default:
+        break;
+    }
+
+    return NULL;
+  }
 
   // Handle drawing all cells in table
   void draw_cell(TableContext context, int R=0, int C=0, int X=0, int Y=0, int W=0, int H=0)
@@ -299,6 +521,10 @@ protected:
               svg_link_->draw(X + 2, Y + 2);
             }
 
+            if (rowdata_.at(R).bytes == -1 && svg_noaccess_) {
+              svg_noaccess_->draw(X + 2, Y + 2);
+            }
+
             X += col_name_extra_w();
             fw += col_name_extra_w();
           }
@@ -314,7 +540,7 @@ protected:
               svg->resize(H, H);
               col_resize_min(col_name_extra_w() + svg->w());
             }
-            svg->draw(W + col_name_extra_w() - svg->w(), Y);
+            svg->draw(X + W - (col_name_extra_w() + svg->w()), Y);
           }
         }
         fl_pop_clip();
@@ -338,7 +564,7 @@ protected:
     }
 
     // sort data while preserving order between equal elements
-    std::stable_sort(rowdata_.begin(), rowdata_.end(), filetable_Sort(col, reverse));
+    std::stable_sort(rowdata_.begin(), rowdata_.end(), sort(col, reverse));
 
     // update table row selection from rowdata_
     for (int i = 0; i < rows(); ++i) {
@@ -404,39 +630,39 @@ protected:
     return ret;
   }
 
-  // set a callback to handle double-clicks on entries
-  void double_click_callback()
+  std::string last_clicked_item()
   {
-    const char *name = rowdata_[last_row_clicked_].cols[COL_NAME];
-    std::string dir;
+    std::string s;
 
-    if (!open_directory_.empty()) {
-      dir = open_directory_;
-
-      if (dir.back() != '/') {
-        dir.push_back('/');
-      }
-      dir += name;
-      name = dir.c_str();
-    }
-
-    if (rowdata_[last_row_clicked_].isdir()) {
-      if (!load_dir(name)) {
-        // refresh current directory if we cannot access
-        load_dir(NULL);
-      }
+    if (open_directory_.empty()) {
+      s = rowdata_[last_row_clicked_].cols[COL_NAME];
     } else {
-      selection_ = name;
-      window()->hide();
+      s = open_directory_;
+      if (s.back() != '/') s.push_back('/');
+      s += rowdata_[last_row_clicked_].cols[COL_NAME];
     }
+
+    return s;
   }
 
-  // set icon for row entry; here you can i.e. set icons dependant on
-  // the magic bytes or simply the file extension; set NULL for no icon
-  virtual Fl_SVG_Image *icon(filetable_Row) { return NULL; }
+  // set a callback to handle double-clicks on entries
+  virtual void double_click_callback()
+  {
+    if (!rowdata_[last_row_clicked_].isdir()) {
+      selection_ = last_clicked_item();
+      window()->hide();
+      return;
+    }
 
-  // similar to printf() buf returns an allocated string
-  char *printf_alloc(const char *fmt, ...)
+    load_dir(last_clicked_item().c_str());
+  }
+
+  // return pointer to icon set for row entry;
+  // setting the icons is done in sub-classes
+  virtual Fl_SVG_Image *icon(Row) const { return NULL; }
+
+  // similar to printf() but returns an allocated string
+  static char *printf_alloc(const char *fmt, ...)
   {
     char *buf;
     va_list args, args2;
@@ -473,6 +699,10 @@ protected:
   {
     const char *unknown = "?? " STR_ELEMENTS " ";
     char *buf;
+
+    if (empty(directory)) {
+      return NULL;
+    }
 
     std::string path = open_directory_;
     path.push_back('/');
@@ -513,7 +743,7 @@ protected:
     std::vector<std::string> vec;
     std::string in, out;
 
-    if (!path || path[0] == 0) {
+    if (!path || *path == 0) {
       return NULL;
     }
 
@@ -536,12 +766,11 @@ protected:
     // prepend current directory
     if (in[0] != '/') {
       char *cdn = get_current_dir_name();
+      if (!cdn) return NULL;
 
-      if (!cdn) {
-        return NULL;
-      }
       in.insert(0, 1, '/');
       in.insert(0, cdn);
+      free(cdn);
     }
 
     // insert trailing '/' (it's needed)
@@ -606,7 +835,7 @@ protected:
       return false;
     }
 
-    for (std::string & ext : filter_list_) {
+    for (const std::string &ext : filter_list_) {
       if (ext.size() >= len) {
         continue;
       }
@@ -663,23 +892,16 @@ protected:
   }
 
 public:
-  filetable_(int X, int Y, int W, int H, const char *L=NULL) : Fl_Table_Row(X, Y, W, H, L)
+  filetable_(int X, int Y, int W, int H, const char *L=NULL)
+  : Fl_Table_Row(X, Y, W, H, L)
   {
     label_header_[COL_NAME] = STR_NAME;
     label_header_[COL_SIZE] = STR_SIZE;
     label_header_[COL_LAST_MOD] = STR_LAST_MOD;
 
-    sort_reverse_ = 0;
-    sort_last_row_ = 0;
-    last_row_clicked_ = -1;
-    dc_timeout_ = 0.8;
-    autowidth_padding_ = 20;
-    autowidth_max_ = 0;
-    show_hidden_ = false;
-    svg_link_ = NULL;
+    color(FL_WHITE, fl_rgb_color(0x41, 0x69, 0xE1));
 
     // icon_square_[0]
-
     const char *svg_data1 = \
       "<svg width='16' height='16'>" \
        "<defs>" \
@@ -691,18 +913,15 @@ public:
        "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
       "</svg>";
 
-    color(FL_WHITE);
     icon_square_[0] = new Fl_SVG_Image(NULL, svg_data1);
+    icon_square_[0]->proportional = false;
 
     if (icon_square_[0]->fail()) {
       delete icon_square_[0];
       icon_square_[0] = NULL;
-    } else {
-      icon_square_[0]->proportional = false;
     }
 
     // icon_square_[1]
-
     const char *svg_data2 = \
       "<svg width='16' height='16'>" \
        "<defs>" \
@@ -714,14 +933,12 @@ public:
        "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
       "</svg>";
 
-    selection_color(fl_rgb_color(0x41, 0x69, 0xE1));
     icon_square_[1] = new Fl_SVG_Image(NULL, svg_data2);
+    icon_square_[1]->proportional = false;
 
     if (icon_square_[1]->fail()) {
       delete icon_square_[1];
       icon_square_[1] = NULL;
-    } else {
-      icon_square_[1]->proportional = false;
     }
 
     col_header(1);
@@ -737,19 +954,15 @@ public:
   ~filetable_()
   {
     clear();
-
-    if (icon_square_[0]) {
-      delete icon_square_[0];
-    }
-
-    if (icon_square_[1]) {
-      delete icon_square_[1];
-    }
+    if (icon_square_[0]) delete icon_square_[0];
+    if (icon_square_[1]) delete icon_square_[1];
   }
 
   void clear()
   {
     Fl_Table_Row::clear();
+
+    // clear rowdata_ entirely
 
     while (rowdata_.size() > 0) {
       for (int i = 0; i < COL_MAX; ++i) {
@@ -772,39 +985,46 @@ public:
   {
     DIR *d;
     struct dirent *dir;
-    int r = 0;
-
-    clear();
-
-    if (!dirname && open_directory_.empty()) {
-      return false;
-    }
-
-    if (dirname) {
-      open_directory_ = simplify_directory_path(dirname);
-
-      if (open_directory_.empty()) {
-        // fall back to using realpath() if needed
-        char *rp = realpath(dirname, NULL);
-        open_directory_ = rp ? rp : dirname;
-      }
-    }
+    int fd = -1;
 
     // calling load_dir(NULL) acts as a "refresh" using
     // the current open_directory_
-    if ((d = opendir(open_directory_.c_str())) == NULL) {
+    if (empty(dirname) && open_directory_.empty()) {
       return false;
     }
 
-    int fd = ::open(open_directory_.c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY);
+    { std::string new_dir;  // used only within this scope
 
-    if (fd == -1) {
-      return false;
-    }
+      if (dirname) {
+        new_dir = simplify_directory_path(dirname);
+
+        if (new_dir.empty()) {
+          // fall back to using realpath() if needed
+          char *rp = realpath(dirname, NULL);
+          new_dir = rp ? rp : dirname;
+          free(rp);
+        }
+      } else {
+        new_dir = open_directory_;
+      }
+
+      if ((d = opendir(new_dir.c_str())) == NULL) {
+        return false;
+      }
+
+      if ((fd = ::open(new_dir.c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY)) == -1) {
+        return false;
+      }
+
+      open_directory_ = new_dir;
+    }  // new_dir end
+
+    // clear current table
+    clear();
 
     while ((dir = readdir(d)) != NULL) {
       struct stat st, lst;
-      filetable_Row row;
+      Row row;
       int rv_stat = -1;
       int rv_lstat = -1;
 
@@ -881,7 +1101,6 @@ public:
       row.cols[COL_NAME] = strdup(dir->d_name);
 
       rowdata_.push_back(row);
-      r++;
     }
 
     closedir(d);
@@ -908,13 +1127,12 @@ public:
       return false;
     }
 
-    std::string dir = open_directory_;
-    dir += "/..";
+    std::string dir(open_directory_ + "/..");
 
     return load_dir(dir.c_str());
   }
 
-  const char *selection() {
+  const char *selection() const {
     return selection_.empty() ? NULL : selection_.c_str();
   }
 
@@ -956,15 +1174,12 @@ public:
   // add file extension to filter
   void add_filter(const char *str)
   {
-    if (!str || str[0] == 0) {
+    if (empty(str)) {
       return;
     }
 
     std::string ext;
-
-    if (str[0] != '.') {
-      ext = ".";
-    }
+    if (str[0] != '.') ext = ".";
     ext += str;
 
     filter_list_.push_back(ext);
@@ -973,16 +1188,15 @@ public:
   // add file extensions to filter
   void add_filter_list(const char *list, const char *delim)
   {
-    char *copy, *str, *tok;
-    int i;
+    char *tok;
 
-    if (!list || list[0] == 0 || !delim || delim[0] == 0) {
+    if (empty(list) || empty(delim)) {
       return;
     }
 
-    copy = strdup(list);
+    char *copy = strdup(list);
 
-    for (i = 1, str = copy; ; ++i, str = NULL) {
+    for (char *str = copy; ; str = NULL) {
       if ((tok = strtok(str, delim)) == NULL) {
         break;
       }
@@ -992,6 +1206,12 @@ public:
 
     free(copy);
   }
+
+  const char *open_directory() const {
+    return open_directory_.empty() ? NULL : open_directory_.c_str();
+  }
+
+  virtual void load_default_icons() {}
 
   // set
   void label_header(int idx, const char *l) {
@@ -1005,7 +1225,7 @@ public:
   void show_hidden(bool b) { show_hidden_ = b; }
 
   // get
-  const char *label_header(int idx) {
+  const char *label_header(int idx) const {
     return (idx >= 0 && idx < COL_MAX) ? label_header_[idx] : NULL;
   }
 

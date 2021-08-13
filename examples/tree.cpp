@@ -27,10 +27,6 @@
 
 #include "fltk_dirtree.hpp"
 
-#include "Folder_generic.svg.h"
-#include "Folder_noaccess.svg.h"
-#include "Folder_link.svg.h"
-
 
 static void myCallback(Fl_Widget *w, void *)
 {
@@ -60,22 +56,18 @@ int main()
 
   fltk::dirtree tree(5, 5, win.w()-10, win.h()-10);
   tree.callback(myCallback, NULL);
-  //tree.item_labelsize(16);
+  tree.load_default_icons();
 
-  Fl_SVG_Image icon(NULL, folder_generic_svg);
-  Fl_SVG_Image icon_link(NULL, folder_link_svg);
-  Fl_SVG_Image icon_locked(NULL, folder_noaccess_svg);
+  tree.load_dir("/media");
+  tree.load_dir("/boot/grub/../grub/fonts/////");
+  tree.load_dir(".");
+  tree.load_dir("../fltk");
+  tree.load_dir("/root/xxxx");
 
-  tree.usericon_svg(&icon);
-  tree.usericon_link(&icon_link);
-  tree.usericon_locked(&icon_locked);
+  tree.item_labelsize(16);  // update all items
 
-  tree.load_directory("/boot/grub/../grub/fonts/////");
-  tree.load_directory(".");
-  tree.load_directory("../fltk");
-  tree.load_directory("/var");
-
-  tree.item_labelsize(16);  // reopens all open tree items
+  //Fl_SVG_Image lnk("../include/Overlay_link.svg");
+  //tree.usericon_link(&lnk);
 
   win.end();
   win.resizable(tree);

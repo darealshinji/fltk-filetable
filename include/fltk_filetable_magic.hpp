@@ -33,52 +33,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 #ifdef DLOPEN_MAGIC
-
-#include <dlfcn.h>
-
-#define	MAGIC_SYMLINK           0x0000002
-#define	MAGIC_MIME_TYPE         0x0000010
-#define	MAGIC_PRESERVE_ATIME    0x0000080
-#define	MAGIC_NO_CHECK_COMPRESS 0x0001000
-#define	MAGIC_NO_CHECK_ELF      0x0010000
-#define MAGIC_NO_CHECK_ENCODING 0x0200000
-
-typedef struct magic_set *magic_t;
-
-// magic_open()
-typedef magic_t (*magic_open_XX_t) (int);
-static magic_open_XX_t magic_open_XX = NULL;
-
-// magic_close()
-typedef void (*magic_close_XX_t) (magic_t);
-static magic_close_XX_t magic_close_XX = NULL;
-
-// magic_file()
-typedef const char *(*magic_file_XX_t) (magic_t, const char *);
-static magic_file_XX_t magic_file_XX = NULL;
-
-// magic_error()
-typedef const char *(*magic_error_XX_t) (magic_t);
-static magic_error_XX_t magic_error_XX = NULL;
-
-// magic_load()
-typedef int (*magic_load_XX_t) (magic_t, const char *);
-static magic_load_XX_t magic_load_XX = NULL;
-
+# include <dlfcn.h>
 #else
-
-#include <magic.h>
-
-#define magic_open_XX  magic_open
-#define magic_close_XX magic_close
-#define magic_file_XX  magic_file
-#define magic_error_XX magic_error
-#define magic_load_XX  magic_load
-
+# include <magic.h>
 #endif
-
 
 #include "fltk_filetable_.hpp"
 
@@ -88,19 +47,41 @@ namespace fltk
 
 class filetable_magic : public filetable_
 {
-public:
+private:
+
+#ifdef DLOPEN_MAGIC
   enum {
-    ICN_DIR,   // directory
-    ICN_FILE,  // regular file
-    ICN_LINK,  // symbolic link (overlay)
-    ICN_BLK,   // block device
-    ICN_CHR,   // character device
-    ICN_PIPE,  // FIFO/pipe
-    ICN_SOCK,  // socket
-    ICN_LAST
+    MAGIC_SYMLINK = 0x0000002,
+    MAGIC_MIME_TYPE = 0x0000010,
+    MAGIC_PRESERVE_ATIME = 0x0000080,
+    MAGIC_NO_CHECK_COMPRESS = 0x0001000,
+    MAGIC_NO_CHECK_ELF = 0x0010000,
+    MAGIC_NO_CHECK_ENCODING = 0x0200000
   };
 
-private:
+  typedef struct magic_set *magic_t;
+
+  // magic_open()
+  typedef magic_t (*magic_open_t) (int);
+  static magic_open_t magic_open;
+
+  // magic_close()
+  typedef void (*magic_close_t) (magic_t);
+  static magic_close_t magic_close;
+
+  // magic_file()
+  typedef const char *(*magic_file_t) (magic_t, const char *);
+  static magic_file_t magic_file;
+
+  // magic_error()
+  typedef const char *(*magic_error_t) (magic_t);
+  static magic_error_t magic_error;
+
+  // magic_load()
+  typedef int (*magic_load_t) (magic_t, const char *);
+  static magic_load_t magic_load;
+#endif
+
   typedef struct {
     char *list;
     Fl_SVG_Image *svg;
@@ -132,22 +113,20 @@ private:
       return false;
     }
 
-    dlerror();  // clear error messages
+    magic_open = reinterpret_cast<magic_open_t>(dlsym(handle_, "magic_open"));
+    if (!magic_open) return false;
 
-    magic_open_XX = reinterpret_cast<magic_open_XX_t>(dlsym(handle_, "magic_open"));
-    if (dlerror()) return false;
+    magic_close = reinterpret_cast<magic_close_t>(dlsym(handle_, "magic_close"));
+    if (!magic_close) return false;
 
-    magic_close_XX = reinterpret_cast<magic_close_XX_t>(dlsym(handle_, "magic_close"));
-    if (dlerror()) return false;
+    magic_file = reinterpret_cast<magic_file_t>(dlsym(handle_, "magic_file"));
+    if (!magic_file) return false;
 
-    magic_file_XX = reinterpret_cast<magic_file_XX_t>(dlsym(handle_, "magic_file"));
-    if (dlerror()) return false;
+    magic_error = reinterpret_cast<magic_error_t>(dlsym(handle_, "magic_error"));
+    if (!magic_error) return false;
 
-    magic_error_XX = reinterpret_cast<magic_error_XX_t>(dlsym(handle_, "magic_error"));
-    if (dlerror()) return false;
-
-    magic_load_XX = reinterpret_cast<magic_load_XX_t>(dlsym(handle_, "magic_load"));
-    if (dlerror()) return false;
+    magic_load = reinterpret_cast<magic_load_t>(dlsym(handle_, "magic_load"));
+    if (!magic_load) return false;
 
     symbols_loaded_ = true;
 
@@ -155,7 +134,7 @@ private:
   }
 #endif
 
-  Fl_SVG_Image *icon(filetable_Row r)
+  Fl_SVG_Image *icon(Row r) const
   {
     switch (r.type()) {
       case 'D':
@@ -176,7 +155,7 @@ private:
     return icn_[ICN_FILE].svg;
   }
 
-  Fl_SVG_Image *icon_magic(filetable_Row r)
+  Fl_SVG_Image *icon_magic(Row r) const
   {
     const char *p;
 
@@ -186,12 +165,12 @@ private:
     }
 
     if (open_directory_.empty()) {
-      p = magic_file_XX(cookie_, r.cols[COL_NAME]);
+      p = magic_file(cookie_, r.cols[COL_NAME]);
     } else {
       std::string file = open_directory_;
       file.push_back('/');
       file += r.cols[COL_NAME];
-      p = magic_file_XX(cookie_, file.c_str());
+      p = magic_file(cookie_, file.c_str());
     }
 
     if (!p) {
@@ -297,28 +276,22 @@ private:
     return icn_[ICN_FILE].svg;
   }
 
-  bool filter_show_entry(const char *filename) {
-    return filetable_::filter_show_entry(filename);
-  }
-
-  // TODO: lock/unlock/awake isn't used correctly here
+  // TODO: stuttering when loading huge directories first time
   void update_icons()
   {
     for (int i=0; i < rows(); ++i) {
       if (rowdata_.at(i).type() == 'R') {
-        //Fl::lock();
         rowdata_.at(i).svg = icon_magic(rowdata_.at(i));
         redraw_range(i, i, COL_NAME, COL_NAME);
         parent()->redraw();
-        //Fl::unlock();
-        //Fl::awake();
+        Fl::awake();
       }
     }
 
-    //Fl::lock();
+    Fl::lock();
     redraw_range(0, rows()-1, COL_NAME, COL_NAME);
-    //Fl::unlock();
-    //Fl::awake();
+    Fl::unlock();
+    Fl::awake();
   }
 
 public:
@@ -332,6 +305,7 @@ public:
       icn_[i].alloc = false;
     }
     svg_link_ = icn_[ICN_LINK].svg;
+    svg_noaccess_ = icn_[ICN_LOCK].svg;
 
 #ifdef DLOPEN_MAGIC
     if (load_symbols()) {
@@ -344,11 +318,11 @@ public:
         | MAGIC_NO_CHECK_ELF
         | MAGIC_NO_CHECK_ENCODING;
 
-      cookie_ = magic_open_XX(flags);
+      cookie_ = magic_open(flags);
 
-      if (!magic_error_XX(cookie_)) {
-        if (magic_load_XX(cookie_, NULL) != 0) {
-          magic_close_XX(cookie_);
+      if (!magic_error(cookie_)) {
+        if (magic_load(cookie_, NULL) != 0) {
+          magic_close(cookie_);
         } else {
           use_magic_ = true;
         }
@@ -375,19 +349,13 @@ public:
       }
     }
 
-    while (icn_custom_.size() > 0) {
-      if (icn_custom_.back().list) {
-        free(icn_custom_.back().list);
-      }
-
-      if (icn_custom_.back().svg) {
-        delete icn_custom_.back().svg;
-      }
-      icn_custom_.pop_back();
+    for (const auto e : icn_custom_) {
+      if (e.list) free(e.list);
+      if (e.svg) delete e.svg;
     }
 
     if (use_magic_) {
-      magic_close_XX(cookie_);
+      magic_close(cookie_);
     }
 
 #ifdef DLOPEN_MAGIC
@@ -442,15 +410,30 @@ public:
       return false;
     }
 
-    std::string dir = open_directory_;
-    dir += "/..";
+    std::string dir(open_directory_ + "/..");
 
     return load_dir(dir.c_str());
   }
 
+  // same as the parent class double_click_callback() method, but we must
+  // replace it to call the child class load_dir() method,
+  // or else icons won't update after double-clicking on a directory
+  void double_click_callback()
+  {
+    std::string s(last_clicked_item());
+
+    if (!rowdata_[last_row_clicked_].isdir()) {
+      selection_ = s;
+      window()->hide();
+      return;
+    }
+
+    load_dir(s.c_str());
+  }
+
   bool set_icon(const char *filename, const char *data, int idx)
   {
-    if ((!data && !filename) || idx < 0 || idx >= ICN_LAST) {
+    if ((empty(data) && empty(filename)) || idx < 0 || idx >= ICN_LAST) {
       return false;
     }
 
@@ -473,6 +456,8 @@ public:
 
     if (idx == ICN_LINK) {
       svg_link_ = icn_[ICN_LINK].svg;
+    } else if (idx == ICN_LOCK) {
+      svg_noaccess_ = icn_[ICN_LOCK].svg;
     }
 
     return true;
@@ -481,13 +466,11 @@ public:
   // set list of MIME types, semicolon-separated
   bool set_icon(const char *filename, const char *data, const char *list)
   {
-    size_t len;
-
-    if ((!filename && !data) || !list || (len = strlen(list)) < 1) {
+    if ((empty(filename) && empty(data)) || empty(list)) {
       return false;
     }
 
-    char *buf = reinterpret_cast<char *>(malloc(len + 2));
+    char *buf = reinterpret_cast<char *>(malloc(strlen(list) + 2));
     char *p = buf;
 
     if (*list != ';') {
@@ -543,11 +526,26 @@ public:
 
     return true;
   }
+
+  // load a set of default icons
+  void load_default_icons()
+  {
+    for (int i=0; i < ICN_LAST; ++i) {
+      set_icon(NULL, default_icon_data(i), i);
+    }
+  }
 };
 
 #ifdef DLOPEN_MAGIC
+// initializing static members
 void *filetable_magic::handle_ = NULL;
 bool filetable_magic::symbols_loaded_ = false;
+
+filetable_magic::magic_open_t filetable_magic::magic_open = NULL;
+filetable_magic::magic_close_t filetable_magic::magic_close = NULL;
+filetable_magic::magic_file_t filetable_magic::magic_file = NULL;
+filetable_magic::magic_error_t filetable_magic::magic_error = NULL;
+filetable_magic::magic_load_t filetable_magic::magic_load = NULL;
 #endif
 
 } // namespace fltk

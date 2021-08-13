@@ -29,9 +29,6 @@
 
 #include "fltk_filetable_extension.hpp"
 
-#include "Folder_generic.svg.h"
-#include "File_Generic.svg.h"
-#include "Overlay_link.svg.h"
 #include "File_Text.svg.h"
 #include "File_Image_3.svg.h"
 #include "File_Video.svg.h"
@@ -83,9 +80,7 @@ int main()
     //table.add_filter(".cpp");
     //table.add_filter_list(".zip|.tar|rar||", "|");
 
-    table.set_icon(NULL, folder_generic_svg, fltk::filetable_extension::ICN_DIR);
-    table.set_icon(NULL, file_generic_svg, fltk::filetable_extension::ICN_FILE);
-    table.set_icon(NULL, overlay_link_svg, fltk::filetable_extension::ICN_LINK);
+    table.load_default_icons();
     table.set_icon(NULL, file_text_svg, txt, delim);
     table.set_icon(NULL, file_image_3_svg, imgs, delim);
     table.set_icon(NULL, file_video_svg, vid, delim);

@@ -38,18 +38,6 @@ namespace fltk
 
 class filetable_simple : public filetable_
 {
-public:
-  enum {
-    ICN_DIR,   // directory
-    ICN_FILE,  // regular file
-    ICN_LINK,  // symbolic link (overlay)
-    ICN_BLK,   // block device
-    ICN_CHR,   // character device
-    ICN_PIPE,  // FIFO/pipe
-    ICN_SOCK,  // socket
-    ICN_LAST
-  };
-
 private:
   typedef struct {
     Fl_SVG_Image *svg;
@@ -58,7 +46,7 @@ private:
 
   svg_t icn_[ICN_LAST];
 
-  Fl_SVG_Image *icon(filetable_Row r)
+  Fl_SVG_Image *icon(Row r) const
   {
     switch (r.type()) {
       case 'D':
@@ -87,6 +75,7 @@ public:
       icn_[i].alloc = false;
     }
     svg_link_ = icn_[ICN_LINK].svg;
+    svg_noaccess_ = icn_[ICN_LOCK].svg;
   }
 
   ~filetable_simple()
@@ -118,7 +107,7 @@ public:
 
   bool set_icon(const char *filename, const char *data, int idx)
   {
-    if ((!data && !filename) || idx < 0 || idx >= ICN_LAST) {
+    if ((empty(data) && empty(filename)) || idx < 0 || idx >= ICN_LAST) {
       return false;
     }
 
@@ -141,9 +130,19 @@ public:
 
     if (idx == ICN_LINK) {
       svg_link_ = icn_[ICN_LINK].svg;
+    } else if (idx == ICN_LOCK) {
+      svg_noaccess_ = icn_[ICN_LOCK].svg;
     }
 
     return true;
+  }
+
+  // load a set of default icons
+  void load_default_icons()
+  {
+    for (int i=0; i < ICN_LAST; ++i) {
+      set_icon(NULL, default_icon_data(i), i);
+    }
   }
 };
 

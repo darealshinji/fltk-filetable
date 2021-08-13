@@ -26,17 +26,15 @@
 #include <FL/Fl_Double_Window.H>
 
 #include "fltk_fileselection.hpp"
-#include "fltk_filetable_simple.hpp"
 
 
 int main()
 {
-  Fl_Double_Window win(500, 400, "Test");
+  Fl_Double_Window win(800, 600, "Test");
 
-  fltk::filetable_simple table(0, 0, 0, 0);
-  fltk::fileselection sel(0, 0, win.w(), win.h(), &table);
-
-  table.load_dir("/");
+  fltk::fileselection sel(0, 0, win.w(), win.h(), NULL);
+  sel.load_default_icons();
+  sel.load_dir("/home/djcj");
 
   win.end();
   win.resizable(sel);

@@ -39,24 +39,16 @@ namespace fltk
 
 class filetable_extension : public filetable_
 {
-public:
-  enum {
-    ICN_DIR,   // directory
-    ICN_FILE,  // regular file
-    ICN_LINK,  // link (overlay)
-    ICN_LAST
-  };
-
 private:
   typedef struct {
     std::vector<std::string> list;
     Fl_SVG_Image *svg;
   } icn_t;
 
-  Fl_SVG_Image *icn_[ICN_LAST];
+  Fl_SVG_Image *icn_[4];
   std::vector<icn_t> icn_custom_;
 
-  Fl_SVG_Image *icon(filetable_Row r)
+  Fl_SVG_Image *icon(Row r) const
   {
     if (r.isdir()) {
       return icn_[ICN_DIR];
@@ -90,33 +82,27 @@ private:
 public:
   filetable_extension(int X, int Y, int W, int H, const char *L=NULL) : filetable_(X,Y,W,H,L)
   {
-    icn_[ICN_DIR] = NULL;
-    icn_[ICN_FILE] = NULL;
-    icn_[ICN_LINK] = NULL;
+    for (size_t i=0; i < sizeof(icn_)/sizeof(*icn_); ++i) {
+      icn_[i] = NULL;
+    }
     svg_link_ = icn_[ICN_LINK];
+    svg_noaccess_ = icn_[ICN_LOCK];
   }
 
   ~filetable_extension()
   {
-    for (int i = 0; i < ICN_LAST; ++i) {
-      if (icn_[i]) {
-        delete icn_[i];
-      }
+    for (size_t i=0; i < (sizeof(icn_)/sizeof(*icn_)); ++i) {
+      if (icn_[i]) delete icn_[i];
     }
 
-    while (icn_custom_.size() > 0) {
-      if (icn_custom_.back().svg) {
-        delete icn_custom_.back().svg;
-      }
-      icn_custom_.pop_back();
+    for (const auto e : icn_custom_) {
+      if (e.svg) delete e.svg;
     }
-
-    icn_custom_.clear();
   }
 
   bool set_icon(const char *filename, const char *data, int idx)
   {
-    if ((!filename && !data) || idx < 0 || idx >= ICN_LAST) {
+    if ((empty(filename) && empty(data)) || idx < 0 || idx > ICN_LOCK) {
       return false;
     }
 
@@ -137,19 +123,20 @@ public:
 
     if (idx == ICN_LINK) {
       svg_link_ = icn_[ICN_LINK];
+    } else if (idx == ICN_LOCK) {
+      svg_noaccess_ = icn_[ICN_LOCK];
     }
 
     return true;
   }
 
-  // svg icon and list of file extensions separated by '/' and without dots
+  // svg icon and list of file extensions separated by a delimiter and without dots
   bool set_icon(const char *filename, const char *data, const char *list, const char *delim)
   {
     std::vector<std::string> filter_list;
-    char *str, *tok;
-    int i;
+    char *tok;
 
-    if ((!filename && !data) || !list || !delim) {
+    if ((empty(filename) && empty(data)) || empty(list) || empty(delim)) {
       return false;
     }
 
@@ -165,16 +152,13 @@ public:
 
     char *copy = strdup(list);
 
-    for (i = 1, str = copy; ; ++i, str = NULL) {
+    for (char *str = copy; ; str = NULL) {
       if ((tok = strtok(str, delim)) == NULL) {
         break;
       }
 
       std::string ext;
-
-      if (tok[0] != '.') {
-        ext = ".";
-      }
+      if (tok[0] != '.') ext = ".";
       ext += tok;
 
       filter_list.push_back(ext);
@@ -190,6 +174,13 @@ public:
     return true;
   }
 
+  // load a set of default icons
+  void load_default_icons()
+  {
+    for (int i=0; i <= ICN_LOCK; ++i) {
+      set_icon(NULL, default_icon_data(i), i);
+    }
+  }
 };
 
 } // namespace fltk

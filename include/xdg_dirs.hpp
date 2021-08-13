@@ -53,10 +53,11 @@ private:
   std::string dirs[LAST];
 
   // lookup XDG entry
-  std::string lookup(FILE *fp, const char *type)
+  std::string lookup(FILE *fp, bool use_realpath, const char *type)
   {
     std::string user_dir;
     char *line = NULL;
+    char *p;
     size_t len = 0;
     ssize_t nread;
 
@@ -73,7 +74,7 @@ private:
 
       if (*line == 0) continue;
 
-      char *p = line;
+      p = line;
 
       // get the type/key
       while (*p == ' ' || *p == '\t') p++;
@@ -104,27 +105,46 @@ private:
         user_dir.clear();
       }
 
-      size_t sublen = 0;
-      char *substr = p;
+      user_dir.reserve(user_dir.length() + strlen(p));
 
-      for ( ; *p && *p != '"'; ++p, ++sublen) {
+      while (*p && *p != '"') {
         if (*p == '\\' && *(p+1) != 0) {
           p++;
-          sublen++;
         }
-      }
-
-      user_dir.append(substr, sublen);
-
-      if ((p = realpath(user_dir.c_str(), NULL)) == NULL) {
-        user_dir.clear();
-      } else {
-        user_dir = p;
-        free(p);
+        user_dir.push_back(*p++);
       }
     }
 
     free(line);
+
+    if (user_dir.empty()) {
+      if (strcmp("XDG_DESKTOP_DIR", type) == 0) {
+        // Special case desktop for historical compatibility
+        user_dir = home_dir + "/Desktop";
+      } else {
+        return "";
+      }
+    }
+
+    if (use_realpath) {
+      if ((p = realpath(user_dir.c_str(), NULL)) != NULL) {
+        user_dir = p;
+        free(p);
+      } else {
+        user_dir.clear();
+      }
+    } else {
+      // remove trailing '/'
+      while (user_dir.back() == '/') {
+        user_dir.pop_back();
+      }
+
+      if (user_dir.empty()) {
+        user_dir = "/";  // string was multiple '/'
+      }
+    }
+
+    user_dir.shrink_to_fit();
 
     return user_dir;
   }
@@ -134,19 +154,28 @@ public:
   virtual ~xdg() {}
 
   // load XDG config values
-  bool get()
+  bool get(bool use_realpath=true)
   {
     FILE *fp;
     char *p;
 
     /* get $HOME */
 
-    if ((p = getenv("HOME")) == NULL || (p = realpath(p, NULL)) == NULL) {
+    if ((p = getenv("HOME")) == NULL) {
       return false;
     }
 
     home_dir = p;
-    free(p);
+
+    while (home_dir.back() == '/') {
+      home_dir.pop_back();
+    }
+
+    if (home_dir.empty()) {
+      return false;
+    }
+
+    home_dir.shrink_to_fit();
 
     /* fopen() config file */
 
@@ -161,25 +190,20 @@ public:
         config_file += "/user-dirs.dirs";
       }
 
+      //config_file = "./user-dirs.dirs";  // test
+
       if ((fp = fopen(config_file.c_str(), "r")) == NULL) {
         return false;
       }
     } // config_file end
 
     /* lookup environment variables */
-
-    dirs[DESKTOP] = lookup(fp, "XDG_DESKTOP_DIR");
-
-    if (dirs[DESKTOP].empty()) {
-      /* Special case desktop for historical compatibility */
-      dirs[DESKTOP] = home_dir + "/Desktop";
-    }
-
-    dirs[DOWNLOAD] = lookup(fp, "XDG_DOWNLOAD_DIR");
-    dirs[DOCUMENTS] = lookup(fp, "XDG_DOCUMENTS_DIR");
-    dirs[MUSIC] = lookup(fp, "XDG_MUSIC_DIR");
-    dirs[PICTURES] = lookup(fp, "XDG_PICTURES_DIR");
-    dirs[VIDEOS] = lookup(fp, "XDG_VIDEOS_DIR");
+    dirs[DESKTOP] = lookup(fp, use_realpath, "XDG_DESKTOP_DIR");
+    dirs[DOWNLOAD] = lookup(fp, use_realpath, "XDG_DOWNLOAD_DIR");
+    dirs[DOCUMENTS] = lookup(fp, use_realpath, "XDG_DOCUMENTS_DIR");
+    dirs[MUSIC] = lookup(fp, use_realpath, "XDG_MUSIC_DIR");
+    dirs[PICTURES] = lookup(fp, use_realpath, "XDG_PICTURES_DIR");
+    dirs[VIDEOS] = lookup(fp, use_realpath, "XDG_VIDEOS_DIR");
 
     fclose(fp);
 
