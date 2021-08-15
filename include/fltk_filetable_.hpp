@@ -89,43 +89,16 @@ protected:
   };
 
   // single row of columns
-  class Row
-  {
-  private:
-    char _type;
-    bool _lnk, _sel;
-
-  public:
-    char *cols[COL_MAX];
-    Fl_SVG_Image *svg;
-    long bytes, last_mod;
-
-    Row()
-    {
-      _type = 0;
-      _lnk = false;
-      _sel = false;
-      bytes = 0;
-      last_mod = 0;
-      svg = NULL;
-
-      for (int i = 0; i < COL_MAX; ++i) {
-        cols[i] = NULL;
-      }
-    }
-
-    bool selected() const { return _sel; }
-    void setselected() { _sel = true; }
-    void setunselected() { _sel = false; }
-
-    char type() const { return _type; }
-    void type(char c) { _type = c; }
-
-    bool isdir() const { return (_type == 'D'); }
-
-    bool islnk() const { return _lnk; }
-    void setlnk() { _lnk = true; }
-  };
+  typedef struct {
+    char *cols[COL_MAX] = {0};
+    Fl_SVG_Image *svg = NULL;
+    char type = 0;
+    bool isdir() const { return (type == 'D'); }
+    long bytes = 0;
+    long last_mod = 0;
+    bool is_link = false;
+    bool selected = false;
+  } Row_t;
 
 private:
   // Sort class to handle sorting column using std::sort
@@ -138,7 +111,7 @@ private:
       _reverse = reverse;
     }
 
-    bool operator() (Row a, Row b) {
+    bool operator() (Row_t a, Row_t b) {
       const char *ap = (_col < COL_MAX) ? a.cols[_col] : "";
       const char *bp = (_col < COL_MAX) ? b.cols[_col] : "";
 
@@ -187,7 +160,7 @@ private:
   bool show_hidden_ = false;
   std::vector<std::string> filter_list_;
 
-  Fl_SVG_Image *icon_square_[2];
+  Fl_SVG_Image *icon_blend_[2];
   const char *label_header_[COL_MAX];
 
   // extra width for icons
@@ -234,7 +207,7 @@ private:
 protected:
   std::string open_directory_;
   std::string selection_;
-  std::vector<Row> rowdata_;
+  std::vector<Row_t> rowdata_;
   int last_row_clicked_ = -1;
   Fl_SVG_Image *svg_link_ = NULL;
   Fl_SVG_Image *svg_noaccess_ = NULL;
@@ -463,6 +436,8 @@ protected:
   // Handle drawing all cells in table
   void draw_cell(TableContext context, int R=0, int C=0, int X=0, int Y=0, int W=0, int H=0)
   {
+    const int icon_blend_W = 8;
+
     if (C >= COL_MAX) {
       return;
     }
@@ -486,11 +461,11 @@ protected:
           Fl_Color bgcol = FL_WHITE;
           Fl_Color textcol = FL_BLACK;
           Fl_Align al = (C == COL_SIZE) ? FL_ALIGN_RIGHT : FL_ALIGN_LEFT;
-          Fl_SVG_Image *svg = icon_square_[0];
+          Fl_SVG_Image *svg = icon_blend_[0];
           int fw = 0;
 
           if (row_selected(R)) {
-            svg = icon_square_[1];
+            svg = icon_blend_[1];
             bgcol = selection_color();
             textcol = FL_WHITE;
           }
@@ -517,7 +492,7 @@ protected:
               rowdata_.at(R).svg->draw(X + 2, Y + 2);
             }
 
-            if (rowdata_.at(R).islnk() && svg_link_) {
+            if (rowdata_.at(R).is_link && svg_link_) {
               svg_link_->draw(X + 2, Y + 2);
             }
 
@@ -536,8 +511,8 @@ protected:
 
           // blend over long text at the end of name column
           if (C == COL_NAME && svg && fw > W) {
-            if (svg->h() != H && svg->w() != H) {
-              svg->resize(H, H);
+            if (svg->w() != icon_blend_W || svg->h() != H) {
+              svg->resize(icon_blend_W, H);
               col_resize_min(col_name_extra_w() + svg->w());
             }
             svg->draw(X + W - (col_name_extra_w() + svg->w()), Y);
@@ -556,11 +531,7 @@ protected:
   {
     // save current selection state in rowdata_
     for (int i = 0; i < rows(); ++i) {
-      if (row_selected(i)) {
-        rowdata_.at(i).setselected();
-      } else {
-        rowdata_.at(i).setunselected();
-      }
+      rowdata_.at(i).selected = row_selected(i) ? true : false;
     }
 
     // sort data while preserving order between equal elements
@@ -568,7 +539,7 @@ protected:
 
     // update table row selection from rowdata_
     for (int i = 0; i < rows(); ++i) {
-      select_row(i, rowdata_.at(i).selected());
+      select_row(i, rowdata_.at(i).selected);
     }
 
     redraw();
@@ -659,7 +630,7 @@ protected:
 
   // return pointer to icon set for row entry;
   // setting the icons is done in sub-classes
-  virtual Fl_SVG_Image *icon(Row) const { return NULL; }
+  virtual Fl_SVG_Image *icon(Row_t) const { return NULL; }
 
   // similar to printf() but returns an allocated string
   static char *printf_alloc(const char *fmt, ...)
@@ -901,7 +872,7 @@ public:
 
     color(FL_WHITE, fl_rgb_color(0x41, 0x69, 0xE1));
 
-    // icon_square_[0]
+    // icon_blend_[0]
     const char *svg_data1 = \
       "<svg width='16' height='16'>" \
        "<defs>" \
@@ -913,15 +884,15 @@ public:
        "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
       "</svg>";
 
-    icon_square_[0] = new Fl_SVG_Image(NULL, svg_data1);
-    icon_square_[0]->proportional = false;
+    icon_blend_[0] = new Fl_SVG_Image(NULL, svg_data1);
+    icon_blend_[0]->proportional = false;
 
-    if (icon_square_[0]->fail()) {
-      delete icon_square_[0];
-      icon_square_[0] = NULL;
+    if (icon_blend_[0]->fail()) {
+      delete icon_blend_[0];
+      icon_blend_[0] = NULL;
     }
 
-    // icon_square_[1]
+    // icon_blend_[1]
     const char *svg_data2 = \
       "<svg width='16' height='16'>" \
        "<defs>" \
@@ -933,12 +904,12 @@ public:
        "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
       "</svg>";
 
-    icon_square_[1] = new Fl_SVG_Image(NULL, svg_data2);
-    icon_square_[1]->proportional = false;
+    icon_blend_[1] = new Fl_SVG_Image(NULL, svg_data2);
+    icon_blend_[1]->proportional = false;
 
-    if (icon_square_[1]->fail()) {
-      delete icon_square_[1];
-      icon_square_[1] = NULL;
+    if (icon_blend_[1]->fail()) {
+      delete icon_blend_[1];
+      icon_blend_[1] = NULL;
     }
 
     col_header(1);
@@ -954,8 +925,8 @@ public:
   ~filetable_()
   {
     clear();
-    if (icon_square_[0]) delete icon_square_[0];
-    if (icon_square_[1]) delete icon_square_[1];
+    if (icon_blend_[0]) delete icon_blend_[0];
+    if (icon_blend_[1]) delete icon_blend_[1];
   }
 
   void clear()
@@ -1024,7 +995,7 @@ public:
 
     while ((dir = readdir(d)) != NULL) {
       struct stat st, lst;
-      Row row;
+      Row_t row;
       int rv_stat = -1;
       int rv_lstat = -1;
 
@@ -1047,17 +1018,17 @@ public:
         // is link?
         if (rv_lstat == 0) {
           if (S_ISLNK(st.st_mode)) {
-            row.setlnk();
+            row.is_link = true;
           }
         } else if (fstatat(fd, dir->d_name, &lst, AT_NO_AUTOMOUNT | AT_SYMLINK_NOFOLLOW) == 0
                    && S_ISLNK(lst.st_mode))
         {
-          row.setlnk();
+          row.is_link = true;
         }
 
         // dircheck and size
         if (S_ISDIR(st.st_mode)) {
-          row.type('D');
+          row.type = 'D';
           row.cols[COL_SIZE] = count_dir_entries(row.bytes, dir->d_name);
         } else {
           // check for file extensions
@@ -1071,23 +1042,23 @@ public:
           switch (st.st_mode & S_IFMT) {
             case S_IFBLK:
               // block device
-              row.type('B');
+              row.type = 'B';
               break;
             case S_IFCHR:
               // character device
-              row.type('C');
+              row.type = 'C';
               break;
             case S_IFIFO:
               // FIFO/pipe
-              row.type('F');
+              row.type = 'F';
               break;
             case S_IFSOCK:
               // socket
-              row.type('S');
+              row.type = 'S';
               break;
             default:
               // regular file or dead link
-              row.type('R');
+              row.type = 'R';
               break;
           }
         }

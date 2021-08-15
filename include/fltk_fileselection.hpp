@@ -31,20 +31,64 @@
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
+#include "fltk_filetable_extension.hpp"
 
+#ifndef DLOPEN_MAGIC
+# define DLOPEN_MAGIC
+#endif
+#include "fltk_filetable_magic.hpp"
 
-// TODO: set filetable_::double_click_callback() through a method?
 
 namespace fltk
 {
 
 class fileselection : public Fl_Group
 {
+public:
+  enum {
+    SIMPLE,
+    EXTENSION,
+    MAGIC
+  };
+
 private:
+  static std::string selection_;
+  int type_;
   dirtree *tree_;
-  filetable_ *table_;
-  std::string selection_;
-  bool table_alloc_;
+
+// Can this be done with templates?
+// Set double_click_callback() as a callback?
+#define MAKE_CLASS(CLASS) \
+  class CLASS##2 : public CLASS { \
+  private: \
+    dirtree *tree_;\
+    \
+    void double_click_callback() { \
+      if (rowdata_[last_row_clicked_].isdir()) { \
+        load_dir(last_clicked_item().c_str()); \
+        tree_->load_dir(last_clicked_item().c_str()); \
+      } else { \
+        fileselection::selection_ = last_clicked_item(); \
+        window()->hide(); \
+      } \
+    } \
+  \
+  public: \
+    CLASS##2 (int X, int Y, int W, int H, dirtree *tree, const char *L=NULL) \
+    : CLASS (X,Y,W,H,L) { tree_ = tree; } \
+  }; \
+  \
+  friend class CLASS##2;
+
+  MAKE_CLASS(filetable_simple);
+  MAKE_CLASS(filetable_extension);
+  MAKE_CLASS(filetable_magic);
+
+#undef MAKE_CLASS
+
+  filetable_simple2 *stable_ = NULL;
+  filetable_extension2 *etable_ = NULL;
+  filetable_magic2 *mtable_ = NULL;
 
   static void tree_callback(Fl_Widget *, void *v) {
     reinterpret_cast<fileselection *>(v)->tree_callback2();
@@ -54,12 +98,8 @@ private:
   {
     switch(tree_->callback_reason()) {
       case FL_TREE_REASON_RESELECTED:
-      case FL_TREE_REASON_SELECTED: {
-          const char *path = tree_->callback_item_path();
-          if (!path) break;
-          table_->load_dir(path);
-          tree_->load_dir(path);
-        }
+      case FL_TREE_REASON_SELECTED:
+        load_dir(tree_->callback_item_path());
         break;
       case FL_TREE_REASON_OPENED:
         tree_->open_callback_item();
@@ -73,44 +113,74 @@ private:
   }
 
 public:
-  fileselection(int X, int Y, int W, int H, filetable_ *table, const char *L=NULL)
-  : Fl_Group(X,Y,W,H,L), table_alloc_(false)
+  fileselection(int X, int Y, int W, int H, int type, const char *L=NULL)
+  : Fl_Group(X,Y,W,H,L)
   {
-    tree_ = new dirtree(X, Y, W*0.25, H);
-    table_ = table;
+    type_ = type;
 
-    if (table_) {
-      table_->resize(X + tree_->w(), Y, W - tree_->w(), H);
-    } else {
-      table_ = new filetable_simple(X + tree_->w(), Y, W - tree_->w(), H);
-      table_alloc_ = true;
+    tree_ = new dirtree(X, Y, W * 0.25, H);
+    tree_->callback(tree_callback, this);
+    tree_->load_default_icons();
+
+    X += tree_->w();
+    W -= tree_->w();
+
+    switch (type_) {
+      case MAGIC:
+        mtable_ = new filetable_magic2(X, Y, W, H, tree_, L);
+        mtable_->load_default_icons();
+        resizable(mtable_);
+        break;
+      case EXTENSION:
+        etable_ = new filetable_extension2(X, Y, W, H, tree_, L);
+        etable_->load_default_icons();
+        resizable(etable_);
+        break;
+      case SIMPLE:
+      default:
+        stable_ = new filetable_simple2(X, Y, W, H, tree_, L);
+        stable_->load_default_icons();
+        resizable(stable_);
+        break;
     }
 
-    tree_->callback(tree_callback, this);
-
-    const char *dir = table_->open_directory();
-    tree_->load_dir(dir ? dir : "/");
-
-    resizable(table_);
     end();
   }
 
   ~fileselection()
   {
-    if (table_alloc_) delete table_;
+    if (stable_) delete stable_;
+    if (etable_) delete etable_;
+    if (mtable_) delete mtable_;
     delete tree_;
   }
 
-  void load_default_icons()
+  bool load_dir(const char *dirname)
   {
-    tree_->load_default_icons();
-    table_->load_default_icons();
+    bool rv;
+
+    switch (type_) {
+      case MAGIC:
+        rv = mtable_->load_dir(dirname);
+        break;
+      case EXTENSION:
+        rv = etable_->load_dir(dirname);
+        break;
+      case SIMPLE:
+      default:
+        rv = stable_->load_dir(dirname);
+        break;
+    }
+
+    return (rv && tree_->load_dir(dirname));
   }
 
-  bool load_dir(const char *dirname) {
-    return (table_->load_dir(dirname) && tree_->load_dir(dirname));
+  const char *selection() {
+    return selection_.empty() ? NULL : selection_.c_str();
   }
 };
+
+std::string fileselection::selection_;
 
 } // namespace fltk
 

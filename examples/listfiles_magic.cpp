@@ -29,18 +29,6 @@
 
 #include "fltk_filetable_magic.hpp"
 
-#include "Folder_generic.svg.h"
-#include "File_Generic.svg.h"
-#include "Overlay_link.svg.h"
-#include "File_Device.svg.h"
-#include "File_Pipe.svg.h"
-#include "File_Text.svg.h"
-#include "File_Image_3.svg.h"
-#include "File_Video.svg.h"
-#include "File_Audio_2.svg.h"
-#include "File_Archive.svg.h"
-#include "File_PDF.svg.h"
-
 
 #define MARGIN 20
 
@@ -76,13 +64,6 @@ int main()
   table.labelsize(16);
   table.load_default_icons();
   //table.add_filter(".cpp");
-
-  table.set_icon(NULL, file_pdf_svg, "application/x-pdf;");
-  table.set_icon(NULL, file_text_svg, "text");
-  table.set_icon(NULL, file_image_3_svg, "application/x-pdf;image");
-  table.set_icon(NULL, file_video_svg, "video;");
-  table.set_icon(NULL, file_audio_2_svg, "audio");
-  table.set_icon(NULL, file_archive_svg, "APPlication/zip;application/x-7z-compressed");
 
   //table.load_dir("/home/");
   table.load_dir();

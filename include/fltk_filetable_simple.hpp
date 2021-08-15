@@ -46,9 +46,9 @@ private:
 
   svg_t icn_[ICN_LAST];
 
-  Fl_SVG_Image *icon(Row r) const
+  Fl_SVG_Image *icon(Row_t r) const
   {
-    switch (r.type()) {
+    switch (r.type) {
       case 'D':
         return icn_[ICN_DIR].svg;
       case 'B':

@@ -32,13 +32,18 @@ int main()
 {
   Fl_Double_Window win(800, 600, "Test");
 
-  fltk::fileselection sel(0, 0, win.w(), win.h(), NULL);
-  sel.load_default_icons();
+  fltk::fileselection sel(0, 0, win.w(), win.h(), fltk::fileselection::MAGIC);
   sel.load_dir("/home/djcj");
 
   win.end();
   win.resizable(sel);
   win.show();
 
-  return Fl::run();
+  int rv = Fl::run();
+
+  if (sel.selection()) {
+    printf("%s\n", sel.selection());
+  }
+
+  return rv;
 }

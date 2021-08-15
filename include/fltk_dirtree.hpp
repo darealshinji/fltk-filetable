@@ -61,24 +61,29 @@ private:
     TYPE_LINK,
     TYPE_LOCKED,
     TYPE_LOCKED_LINK,
-    TYPE_LAST
+    TYPE_NUM
   };
 
+  typedef struct {
+    char *name;
+    bool is_link;
+  } dir_entry_t;
+
   // Sort class to handle sorting column using std::sort
-  class sort {
+  class sort
+  {
+  private:
     bool reverse_;
 
   public:
-    sort(bool reverse) { reverse_ = reverse; }
+    sort(bool reverse) {
+      reverse_ = reverse;
+    }
 
-    bool operator() (const std::string &ap_, const std::string &bp_)
+    bool operator() (const dir_entry_t ap_, const dir_entry_t bp_)
     {
-      const char *ap = ap_.c_str();
-      const char *bp = bp_.c_str();
-
-      // skip first byte if it's '/'
-      if (*ap == '/') ap++;
-      if (*bp == '/') bp++;
+      const char *ap = ap_.name;
+      const char *bp = bp_.name;
 
       // ignore leading dots in filenames ("bin, .config, data, .local"
       // instead of ".config, .local, bin, data")
@@ -103,12 +108,9 @@ private:
 
   bool show_hidden_ = false;
   bool sort_reverse_ = false;
-  Fl_SVG_Image *icon_[TYPE_LAST] = {0};
-  Fl_SVG_Image *def_icon_[TYPE_LAST] = {0};
+  Fl_SVG_Image *icon_[TYPE_NUM] = {0};
+  Fl_SVG_Image *def_icon_[TYPE_NUM] = {0};
   std::string callback_item_path_;
-
-  // use array addresses as marker in the user_data
-  char type_[TYPE_LAST] = {0};
 
   static void default_callback(Fl_Widget *w, void *)
   {
@@ -165,37 +167,31 @@ protected:
     }
 
     if (ti == root()) {
-      if (ti->labelsize() != item_labelsize()) ti->labelsize(item_labelsize());
-      if (ti->labelfont() != item_labelfont()) ti->labelfont(item_labelfont());
-      if (ti->labelfgcolor() != item_labelfgcolor()) ti->labelfgcolor(item_labelfgcolor());
-      if (ti->labelbgcolor() != item_labelbgcolor()) ti->labelbgcolor(item_labelbgcolor());
-      if (ti->usericon() != usericon(TYPE_DEFAULT)) ti->usericon(usericon(TYPE_DEFAULT));
+      ti->labelsize(item_labelsize());
+      ti->labelfont(item_labelfont());
+      ti->labelfgcolor(item_labelfgcolor());
+      ti->labelbgcolor(item_labelbgcolor());
+      ti->usericon(usericon(TYPE_DEFAULT));
     }
 
     for (int i = 0; i < ti->children(); ++i) {
       auto child = ti->child(i);
+      child->labelsize(item_labelsize());
+      child->labelfont(item_labelfont());
+      child->labelfgcolor(item_labelfgcolor());
+      child->labelbgcolor(item_labelbgcolor());
 
-      if (child->labelsize() != item_labelsize()) child->labelsize(item_labelsize());
-      if (child->labelfont() != item_labelfont()) child->labelfont(item_labelfont());
-      if (child->labelfgcolor() != item_labelfgcolor()) child->labelfgcolor(item_labelfgcolor());
-      if (child->labelbgcolor() != item_labelbgcolor()) child->labelbgcolor(item_labelbgcolor());
+      void *ptr = child->user_data();
 
-      // update icons
-      void *d = child->user_data();
-
-      if (d == &type_[TYPE_LINK]) {
-        if (child->usericon() != usericon(TYPE_LINK)) {
-          child->usericon(usericon(TYPE_LINK));
-        }
-      } else if (d == &type_[TYPE_LOCKED]) {
-        if (child->usericon() != usericon(TYPE_LOCKED)) {
-          child->usericon(usericon(TYPE_LOCKED));
-        }
-      } else if (d == &type_[TYPE_LOCKED_LINK]) {
-        if (child->usericon() != usericon(TYPE_LOCKED_LINK)) {
-          child->usericon(usericon(TYPE_LOCKED_LINK));
-        }
-      } else if (child->usericon() != usericon(TYPE_DEFAULT)) {
+      // careful: the enum values are stored as address pointers;
+      // do not attempt to access the addresses!
+      if (ptr == reinterpret_cast<void *>(TYPE_LINK)) {
+        child->usericon(usericon(TYPE_LINK));
+      } else if (ptr == reinterpret_cast<void *>(TYPE_LOCKED)) {
+        child->usericon(usericon(TYPE_LOCKED));
+      } else if (ptr == reinterpret_cast<void *>(TYPE_LOCKED_LINK)) {
+        child->usericon(usericon(TYPE_LOCKED_LINK));
+      } else {
         child->usericon(usericon(TYPE_DEFAULT));
       }
 
@@ -213,7 +209,7 @@ protected:
   {
     struct dirent *dir;
     DIR *d;
-    std::vector<std::string> list;
+    std::vector<dir_entry_t> list;
 
     int fd = ::open(item_path(ti).c_str(), O_CLOEXEC | O_DIRECTORY, O_RDONLY);
 
@@ -244,18 +240,21 @@ protected:
         continue;
       }
 
-      const std::string sep("/");
-
-      // use first byte to identify entry as a link or directory
+      // store directories and links to directories
       if (S_ISDIR(lst.st_mode)) {
-        list.push_back(dir->d_name);
+        dir_entry_t ent;
+        ent.name = strdup(dir->d_name);
+        ent.is_link = false;
+        list.push_back(ent);
       }
       else if (S_ISLNK(lst.st_mode) &&
                fstatat(fd, dir->d_name, &st, AT_NO_AUTOMOUNT) == 0 &&  // act like stat()
                S_ISDIR(st.st_mode))
       {
-        // link to directory: entry begins with '/'
-        list.push_back(sep + dir->d_name);
+        dir_entry_t ent;
+        ent.name = strdup(dir->d_name);
+        ent.is_link = true;
+        list.push_back(ent);
       }
     }
 
@@ -272,16 +271,18 @@ protected:
 
     std::stable_sort(list.begin(), list.end(), sort(sort_reverse()));
 
-    for (const std::string &elem : list) {
-      add(ti, elem.front() == '/' ? elem.c_str() + 1 : elem.c_str());
+    for (const auto elem : list) {
+      add(ti, elem.name);
       auto sub = ti->child(ti->has_children() ? ti->children() - 1 : 0);
 
-      if (elem.front() == '/') {
-        sub->user_data(&type_[TYPE_LINK]);
+      if (elem.is_link) {
+        sub->user_data(reinterpret_cast<void *>(TYPE_LINK));
         sub->usericon(usericon(TYPE_LINK));
       }
+
       close(sub, 0);
       add(sub, NULL);  // dummy entry
+      free(elem.name);
     }
 
     return true;
@@ -305,7 +306,7 @@ public:
 
   ~dirtree()
   {
-    for (int i=0; i < TYPE_LAST; ++i) {
+    for (int i=0; i < TYPE_NUM; ++i) {
       if (def_icon_[i]) delete def_icon_[i];
     }
   }
@@ -324,16 +325,15 @@ public:
     Fl_Tree_Item *ti = callback_item();
 
     if (!load_tree(ti)) {
-      /* don't add a dummy entry, so that the plus sign will disappear */
+      // don't add a dummy entry, so that the plus sign will disappear
       ti->clear_children();
-      //ti->deactivate();
 
-      if (ti->user_data() == &type_[TYPE_LINK]) {
+      if (ti->user_data() == reinterpret_cast<void *>(TYPE_LINK)) {
         ti->usericon(usericon(TYPE_LOCKED_LINK));
-        ti->user_data(&type_[TYPE_LOCKED_LINK]);
+        ti->user_data(reinterpret_cast<void *>(TYPE_LOCKED_LINK));
       } else {
         ti->usericon(usericon(TYPE_LOCKED));
-        ti->user_data(&type_[TYPE_LOCKED]);
+        ti->user_data(reinterpret_cast<void *>(TYPE_LOCKED));
       }
     }
   }
@@ -364,7 +364,7 @@ public:
 
     load_root();
 
-    /* open subdirectories step by step */
+    // open subdirectories step by step
     while (*++p) {
       if (*p != '/') continue;
       *p = 0;
@@ -376,7 +376,7 @@ public:
       *p = '/';
     }
 
-    /* finally open the full path */
+    // finally open the full path
     int rv = open(s);
     free(s);
 
@@ -396,7 +396,7 @@ public:
     // (scour --no-renderer-workaround --strip-xml-prolog --remove-descriptive-elements --enable-comment-stripping
     //  --disable-embed-rasters --indent=none --strip-xml-space --enable-id-stripping --shorten-ids)
 
-    const char *data[TYPE_LAST] =
+    const char *data[TYPE_NUM] =
     {
       // Folder_generic.svg
       "<svg width='64' height='64'>"
@@ -543,7 +543,7 @@ public:
       "</svg>"
     };
 
-    for (int i=0; i < TYPE_LAST; ++i) {
+    for (int i=0; i < TYPE_NUM; ++i) {
       if (!def_icon_[i]) {
         def_icon_[i] = new Fl_SVG_Image(NULL, data[i]);
       }
@@ -602,7 +602,7 @@ public:
 
     Fl_Tree::item_labelsize(val);
 
-    for (int i=0; i < TYPE_LAST; ++i) {
+    for (int i=0; i < TYPE_NUM; ++i) {
       if (icon_[i]) {
         icon_[i]->resize(val, val);
       }

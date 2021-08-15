@@ -45,10 +45,10 @@ private:
     Fl_SVG_Image *svg;
   } icn_t;
 
-  Fl_SVG_Image *icn_[4];
+  Fl_SVG_Image *icn_[ICN_LOCK + 1];
   std::vector<icn_t> icn_custom_;
 
-  Fl_SVG_Image *icon(Row r) const
+  Fl_SVG_Image *icon(Row_t r) const
   {
     if (r.isdir()) {
       return icn_[ICN_DIR];
