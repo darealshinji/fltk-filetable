@@ -33,7 +33,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
 # include <dlfcn.h>
 #else
 # include <magic.h>
@@ -49,7 +49,7 @@ class filetable_magic : public filetable_
 {
 private:
 
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
   enum {
     MAGIC_SYMLINK = 0x0000002,
     MAGIC_MIME_TYPE = 0x0000010,
@@ -99,7 +99,7 @@ private:
   bool use_magic_;
   char *filter_mime_;
 
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
   static void *handle_;
   static bool symbols_loaded_;
 
@@ -307,7 +307,7 @@ public:
     svg_link_ = icn_[ICN_LINK].svg;
     svg_noaccess_ = icn_[ICN_LOCK].svg;
 
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
     if (load_symbols()) {
 #endif
       const int flags =
@@ -327,7 +327,7 @@ public:
           use_magic_ = true;
         }
       }
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
     } else if (handle_) {
       // dlopen() succeeded but dlsym() failed
       dlclose(handle_);
@@ -358,7 +358,7 @@ public:
       magic_close(cookie_);
     }
 
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
     if (handle_) {
       dlclose(handle_);
     }
@@ -840,7 +840,7 @@ public:
   }
 };
 
-#ifdef DLOPEN_MAGIC
+#if DLOPEN_MAGIC != 0
 // initializing static members
 void *filetable_magic::handle_ = NULL;
 bool filetable_magic::symbols_loaded_ = false;

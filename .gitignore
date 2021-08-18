@@ -1,5 +1,6 @@
 /build
 /fltk
+/examples/pch.hpp.gch
 /examples/fileselection
 /examples/listfiles_extension
 /examples/listfiles_magic
