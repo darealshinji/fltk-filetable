@@ -616,10 +616,14 @@ protected:
     return s;
   }
 
+  bool last_clicked_item_isdir() {
+    return rowdata_[last_row_clicked_].isdir();
+  }
+
   // set a callback to handle double-clicks on entries
   virtual void double_click_callback()
   {
-    if (!rowdata_[last_row_clicked_].isdir()) {
+    if (!last_clicked_item_isdir()) {
       selection_ = last_clicked_item();
       window()->hide();
       return;
