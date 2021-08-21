@@ -701,6 +701,36 @@ public:
      "<path d='m27 42c4.16 2.77 10-6 6-9s-11-5-11-5l8.87-7.38 12.13 7.38c-3 1-5 7-2 9 4.16 2.77 10-6 6-9s-20-12-20-12l-13 10 15 7c-3 1-5 7-2 9z' fill='url(#a)'/>"
     "</svg>";
 
+    const char *svg_data_font =
+    "<svg width='64' height='64'>"
+     "<defs>"
+      "<linearGradient id='a' x1='32.48' x2='50.87' y1='12.14' y2='28.45' gradientUnits='userSpaceOnUse'>"
+       "<stop stop-color='#75cfff' offset='0'/>"
+       "<stop stop-color='#0a84c3' offset='1'/>"
+      "</linearGradient>"
+     "</defs>"
+     "<path d='m27 57 2 2 3.13-3.17 4.87 3.17 8.39-11.46 18.61-9.54-5-3 2 2-25 12-9 8zm31-23 4-3-4-2-3 3 3 2z' fill='#010101' fill-opacity='.5725'/>"
+     "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='none' stroke='#010101' stroke-width='4'/>"
+     "<radialGradient id='c' cx='0' cy='0' r='64' gradientTransform='matrix(.5714 0 0 .3333 26 35)' gradientUnits='userSpaceOnUse'>"
+      "<stop stop-color='#c0d5ff' offset='1'/>"
+      "<stop stop-color='#896eff' offset='.4886'/>"
+     "</radialGradient>"
+     "<path d='m6.25 30s5.62 6 10.62 12.5 9.38 13.25 9.38 13.25l32.87-18.88-27.12-21.87-25.75 15z' fill='url(#c)'/>"
+     "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+       "fill='none' stroke='#010101' stroke-width='4'/>"
+     "<linearGradient id='b' x1='105.45' x2='119.92' y1='-23.42' y2='34.32' gradientUnits='userSpaceOnUse'>"
+      "<stop stop-color='#a5b1ff' offset='0'/>"
+      "<stop stop-color='#eaf1ff' offset='.7386'/>"
+      "<stop stop-color='#b3b8ff' offset='1'/>"
+     "</linearGradient>"
+     "<path d='m2.62 30.87s8.33 5.39 16.38 11c8.44 5.88 16.75 10.88 16.75 10.88l22.37-26.38s-12.68-5.67-22.75-11c-5.19-2.75-9.37-6-9.37-6l-23.38 21.5z' "
+       "fill='url(#b)'/>"
+     "<g transform='matrix(1.3949 0 0 1.3949 7.7282 -38.001)'>"
+      "<path d='m6 58 10-20h6l5 20h-6.25l-.75-4h-7l-2 4zm8-6h5l-1-8z' fill='none' stroke='#000' stroke-width='4'/>"
+      "<path d='m6 58 10-20h6l5 20h-6.25l-.75-4h-7l-2 4zm8-6h5l-1-8z' fill='url(#a)'/>"
+     "</g>"
+    "</svg>";
+
     const char *svg_data_pdf =
     "<svg width='64' height='64'>"
      "<path d='m27 57 2 2 3.13-3.17 4.87 3.17 8.39-11.46 18.61-9.54-5-3 2 2-25 12-9 8zm31-23 4-3-4-2-3 3 3 2z' fill='#010101' fill-opacity='.5725'/>"
@@ -834,6 +864,7 @@ public:
     set_icon(NULL, svg_data_image, ";image;");
     set_icon(NULL, svg_data_video, ";video;");
     set_icon(NULL, svg_data_audio, ";audio;");
+    set_icon(NULL, svg_data_font, ";font;");
     set_icon(NULL, svg_data_pdf, ";application/x-pdf;");
     set_icon(NULL, svg_data_app_generic, ";application/x-sharedlib;application/x-executable;");
     set_icon(NULL, svg_data_archive, archive_mime);
