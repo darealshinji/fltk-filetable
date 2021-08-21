@@ -58,11 +58,12 @@ private:
     void double_click_callback()
     {
       if (this->last_clicked_item_isdir()) {
-        this->load_dir(this->last_clicked_item().c_str());
-        tree_ptr->load_dir(this->last_clicked_item().c_str());
-        // TODO: automatically scroll down tree
+        std::string s(this->last_clicked_item());  // need to save this temporarily
+        this->load_dir(s.c_str());
+        tree_ptr->load_dir(s.c_str());
+        tree_ptr->show_item(tree_ptr->find_item(s.c_str()));  // scroll down tree
       } else {
-        *selection_ptr = this->last_clicked_item();
+        *selection_ptr = this->last_clicked_item();  // save selection
         this->window()->hide();
       }
     }
@@ -125,7 +126,7 @@ public:
   }
 
   bool load_dir(const char *dirname) {
-    // call tree_->load_dir() only when table_->load_dir() succeeded
+    // call dirtree::load_dir() only when filetable_::load_dir() succeeded
     return (table_->load_dir(dirname) && tree_->load_dir(dirname));
   }
 

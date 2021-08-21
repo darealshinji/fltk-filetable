@@ -560,7 +560,7 @@ public:
       case TYPE_DEFAULT:
         icon_[idx] = svg;
         icon_[idx]->resize(item_labelsize(), item_labelsize());
-        usericon(icon_[idx]);
+        usericon(icon_[idx]);  // set default usericon
         update_items();
         break;
       case TYPE_LINK:
@@ -598,8 +598,6 @@ public:
   // and adjust the icon size accordingly too
   void item_labelsize(Fl_Fontsize val)
   {
-    //if (val == Fl_Tree::item_labelsize()) return;
-
     Fl_Tree::item_labelsize(val);
 
     for (int i=0; i < TYPE_NUM; ++i) {

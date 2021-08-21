@@ -41,9 +41,8 @@ int main()
 
   int rv = Fl::run();
 
-  if (sel.selection()) {
-    printf("%s\n", sel.selection());
-  }
+  const char *p = sel.selection();
+  if (p) printf("%s\n", p);
 
   return rv;
 }
