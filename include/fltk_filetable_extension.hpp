@@ -177,9 +177,12 @@ public:
   // load a set of default icons
   void load_default_icons()
   {
-    for (int i=0; i <= ICN_LOCK; ++i) {
-      set_icon(NULL, default_icon_data(i), i);
-    }
+#ifdef SVG_DATA_H
+    set_icon(NULL, default_icon_data(ICN_DIR), ICN_DIR);
+    set_icon(NULL, default_icon_data(ICN_FILE), ICN_FILE);
+    set_icon(NULL, default_icon_data(ICN_LINK), ICN_LINK);
+    set_icon(NULL, default_icon_data(ICN_LOCK), ICN_LOCK);
+#endif
   }
 };
 

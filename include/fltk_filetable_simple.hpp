@@ -140,9 +140,11 @@ public:
   // load a set of default icons
   void load_default_icons()
   {
+#ifdef SVG_DATA_H
     for (int i=0; i < ICN_LAST; ++i) {
       set_icon(NULL, default_icon_data(i), i);
     }
+#endif
   }
 };
 

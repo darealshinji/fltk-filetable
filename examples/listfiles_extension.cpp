@@ -29,12 +29,6 @@
 
 #include "fltk_filetable_extension.hpp"
 
-#include "File_Text.svg.h"
-#include "File_Image_3.svg.h"
-#include "File_Video.svg.h"
-#include "File_Audio_2.svg.h"
-#include "File_Archive.svg.h"
-
 
 static void up_cb(Fl_Widget *, void *v)
 {
@@ -81,11 +75,11 @@ int main()
     //table.add_filter_list(".zip|.tar|rar||", "|");
 
     table.load_default_icons();
-    table.set_icon(NULL, file_text_svg, txt, delim);
-    table.set_icon(NULL, file_image_3_svg, imgs, delim);
-    table.set_icon(NULL, file_video_svg, vid, delim);
-    table.set_icon(NULL, file_audio_2_svg, aud, delim);
-    table.set_icon(NULL, file_archive_svg, arch, delim);
+    table.set_icon(NULL, FILE_TEXT_SVG_DATA, txt, delim);
+    table.set_icon(NULL, FILE_IMAGE_3_SVG_DATA, imgs, delim);
+    table.set_icon(NULL, FILE_VIDEO_SVG_DATA, vid, delim);
+    table.set_icon(NULL, FILE_AUDIO_2_SVG_DATA, aud, delim);
+    table.set_icon(NULL, FILE_ARCHIVE_SVG_DATA, arch, delim);
 
     table.load_dir();
 
