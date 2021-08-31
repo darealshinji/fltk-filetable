@@ -57,11 +57,23 @@ class dirtree : public Fl_Tree
 {
 private:
   enum {
-    TYPE_DEFAULT,
-    TYPE_LINK,
-    TYPE_LOCKED,
-    TYPE_LOCKED_LINK,
-    TYPE_NUM
+    TYPE_LINK        = 0x01,
+    TYPE_LOCKED      = 0x02,
+    TYPE_LOCKED_LINK = 0x03
+  };
+
+  enum {
+    ICN_DIR = 0,  // directory
+    ICN_LNK = 1,  // link overlay
+    ICN_LCK = 2,  // lock overlay
+    ICN_NUM = 3
+  };
+
+  enum {
+    RGB_LNK = 0,  // directory + link
+    RGB_LCK = 1,  // directory + lock
+    RGB_LLK = 2,  // directory + lock + link
+    RGB_NUM = 3
   };
 
   typedef struct {
@@ -108,9 +120,11 @@ private:
 
   bool show_hidden_ = false;
   bool sort_reverse_ = false;
-  Fl_SVG_Image *icon_[TYPE_NUM] = {0};
-  Fl_SVG_Image *def_icon_[TYPE_NUM] = {0};
   std::string callback_item_path_;
+
+  Fl_RGB_Image *rgb_[RGB_NUM] = {0};
+  Fl_SVG_Image *def_[ICN_NUM] = {0};
+  Fl_SVG_Image *icn_[ICN_NUM] = {0};
 
   static void default_callback(Fl_Widget *w, void *)
   {
@@ -137,36 +151,137 @@ private:
     }
   }
 
+  static inline bool same_image_format(Fl_RGB_Image *a, Fl_RGB_Image *b)
+  {
+    return (a && b && !a->fail() && !b->fail() &&
+            a->w() == b->w() && a->h() == b->h() &&
+            a->d() == b->d() && a->ld() == b->ld());
+  }
+
+  // set icon by index number
+  void usericon(Fl_SVG_Image *svg, int idx)
+  {
+    if (!svg || svg->fail()) return;
+    svg->proportional = false;
+    svg->resize(item_labelsize(), item_labelsize());
+    icn_[idx] = svg;
+
+    // it's important to set this here
+    if (idx == ICN_DIR) Fl_Tree::usericon(icn_[idx]);
+  }
+
 protected:
   inline bool empty(const char *val) {
     return (!val || *val == 0) ? true : false;
   }
 
-  // appends data from "filename" to "data"
-  static bool append_file(std::string &data, const char *filename, const size_t max)
+  // blend/overlay up to 3 Fl_RGB_Image* images in RGBA format
+  static Fl_RGB_Image *blend_rgba(Fl_RGB_Image *inBg, Fl_RGB_Image *inFg, Fl_RGB_Image *inFg2=NULL)
   {
-    FILE *fp = fopen(filename, "r");
-    if (!fp) return false;
-
-    fseek(fp, 0, SEEK_END);
-    size_t fsize = ftell(fp);
-
-    if (fsize >= max) {
-      fclose(fp);
-      return false;
-    }
-    rewind(fp);
-
-    data.reserve(data.size() + fsize);
-    char c = fgetc(fp);
-
-    while (c != EOF) {
-      data.push_back(c);
-      c = fgetc(fp);
+    // background image is needed
+    if (!inBg || inBg->fail()) {
+      return NULL;
     }
 
-    fclose(fp);
-    return true;
+    if (!inFg || inFg->fail()) {
+      if (inFg2 && !inFg2->fail()) {
+        // take over pointer
+        inFg = inFg2;
+        inFg2 = NULL;
+      } else {
+        // no foreground images provided
+        return NULL;
+      }
+    }
+
+    const int w = inBg->w();
+    int ld = inBg->ld();
+
+    // d() must be 4, ld() must be formatted correctly
+    if (inBg->d() != 4 || (ld > 0 && ld < w*4) || ld < 0) {
+      return NULL;
+    }
+
+    // compare image specs
+
+    if (!same_image_format(inBg, inFg)) {
+      return NULL;
+    }
+
+    if (!same_image_format(inFg, inFg2)) {
+      inFg2 = NULL;
+    }
+
+    // don't calculate with the full line data
+    if (ld != 0) {
+      ld -= w*4;
+    }
+
+    const int h = inBg->h();
+    uchar *out = new uchar[w*h*4];
+
+    // http://de.voidcc.com/question/p-shsavrtq-bz.html
+    if (inFg2) {
+      for (int x=0, i=0; x < w; ++x) {
+        for (int y=0; y < h; ++y, i+=4) {
+          const int off = i + y*ld;
+          const uchar *bg = inBg->array + off;
+          const uchar *fg = inFg->array + off;
+          const uchar *fg2 = inFg2->array + off;
+          uint alpha = fg[3] + 1;
+          uchar *px = out + i;
+
+          if (alpha == 1) {
+            px[0] = bg[0];
+            px[1] = bg[1];
+            px[2] = bg[2];
+            px[3] = bg[3];
+          } else {
+            const uint inv_alpha = 256 - fg[3];
+            px[0] = (alpha * fg[0] + inv_alpha * bg[0]) >> 8;
+            px[1] = (alpha * fg[1] + inv_alpha * bg[1]) >> 8;
+            px[2] = (alpha * fg[2] + inv_alpha * bg[2]) >> 8;
+            px[3] = (alpha * fg[3] + inv_alpha * bg[3]) >> 8;
+          }
+
+          if ((alpha = fg2[3] + 1) != 1) {
+            const uint inv_alpha = 256 - fg2[3];
+            px[0] = (alpha * fg2[0] + inv_alpha * px[0]) >> 8;
+            px[1] = (alpha * fg2[1] + inv_alpha * px[1]) >> 8;
+            px[2] = (alpha * fg2[2] + inv_alpha * px[2]) >> 8;
+            px[3] = (alpha * fg2[3] + inv_alpha * px[3]) >> 8;
+          }
+        }
+      }
+    } else {
+      for (int x=0, i=0; x < w; ++x) {
+        for (int y=0; y < h; ++y, i+=4) {
+          const int off = i + y*ld;
+          const uchar *bg = inBg->array + off;
+          const uchar *fg = inFg->array + off;
+          const uint alpha = fg[3] + 1;
+          uchar *px = out + i;
+
+          if (alpha == 1) {
+            px[0] = bg[0];
+            px[1] = bg[1];
+            px[2] = bg[2];
+            px[3] = bg[3];
+          } else {
+            const uint inv_alpha = 256 - fg[3];
+            px[0] = (alpha * fg[0] + inv_alpha * bg[0]) >> 8;
+            px[1] = (alpha * fg[1] + inv_alpha * bg[1]) >> 8;
+            px[2] = (alpha * fg[2] + inv_alpha * bg[2]) >> 8;
+            px[3] = (alpha * fg[3] + inv_alpha * bg[3]) >> 8;
+          }
+        }
+      }
+    }
+
+    Fl_RGB_Image *rgba = new Fl_RGB_Image(out, w, h, 4);
+    rgba->alloc_array = 1;
+
+    return rgba;
   }
 
   // return the absolute path of an item, ignoring empty labels
@@ -203,7 +318,7 @@ protected:
       ti->labelfont(item_labelfont());
       ti->labelfgcolor(item_labelfgcolor());
       ti->labelbgcolor(item_labelbgcolor());
-      ti->usericon(usericon(TYPE_DEFAULT));
+      ti->usericon(icn_[ICN_DIR]);
     }
 
     for (int i = 0; i < ti->children(); ++i) {
@@ -215,16 +330,15 @@ protected:
 
       void *ptr = child->user_data();
 
-      // careful: the enum values are stored as address pointers;
-      // do not attempt to access the addresses!
+      // careful: the enum values are stored as address pointers
       if (ptr == reinterpret_cast<void *>(TYPE_LINK)) {
-        child->usericon(usericon(TYPE_LINK));
+        child->usericon(rgb_[RGB_LNK]);
       } else if (ptr == reinterpret_cast<void *>(TYPE_LOCKED)) {
-        child->usericon(usericon(TYPE_LOCKED));
+        child->usericon(rgb_[RGB_LCK]);
       } else if (ptr == reinterpret_cast<void *>(TYPE_LOCKED_LINK)) {
-        child->usericon(usericon(TYPE_LOCKED_LINK));
+        child->usericon(rgb_[RGB_LLK]);
       } else {
-        child->usericon(usericon(TYPE_DEFAULT));
+        child->usericon(icn_[ICN_DIR]);
       }
 
       // recursive call of method
@@ -234,7 +348,36 @@ protected:
     recalc_tree();
   }
 
-  void update_items() { update_items(root()); }
+  void update_items(bool regen=false)
+  {
+    // don't regenerate RGB icons
+    if (!regen) {
+      update_items(root());
+      return;
+    }
+
+    // delete RGB data
+    for (int i=0; i < RGB_NUM; ++i) {
+      if (rgb_[i]) delete rgb_[i];
+      rgb_[i] = NULL;
+    }
+
+    // no folder icon means no icons at all
+    if (!icn_[ICN_DIR]) {
+      update_items(root());
+      return;
+    }
+
+    // generate icons (svg images were already resized properly)
+    if (icn_[ICN_LNK]) rgb_[RGB_LNK] = blend_rgba(icn_[ICN_DIR], icn_[ICN_LNK]);
+    if (icn_[ICN_LCK]) rgb_[RGB_LCK] = blend_rgba(icn_[ICN_DIR], icn_[ICN_LCK]);
+
+    if (icn_[ICN_LNK] && icn_[ICN_LCK]) {
+      rgb_[RGB_LLK] = blend_rgba(icn_[ICN_DIR], icn_[ICN_LCK], icn_[ICN_LNK]);
+    }
+
+    update_items(root());
+  }
 
   // open a directory from a selected Fl_Tree_Item
   bool load_tree(Fl_Tree_Item *ti)
@@ -303,18 +446,18 @@ protected:
 
     std::stable_sort(list.begin(), list.end(), sort(sort_reverse()));
 
-    for (const auto elem : list) {
-      add(ti, elem.name);
+    for (const auto e : list) {
+      add(ti, e.name);
       auto sub = ti->child(ti->has_children() ? ti->children() - 1 : 0);
 
-      if (elem.is_link) {
+      if (e.is_link) {
         sub->user_data(reinterpret_cast<void *>(TYPE_LINK));
-        sub->usericon(usericon(TYPE_LINK));
+        sub->usericon(rgb_[RGB_LNK]);
       }
 
       close(sub, 0);
       add(sub, NULL);  // dummy entry
-      free(elem.name);
+      free(e.name);
     }
 
     return true;
@@ -335,8 +478,12 @@ public:
 
   virtual ~dirtree()
   {
-    for (int i=0; i < TYPE_NUM; ++i) {
-      if (def_icon_[i]) delete def_icon_[i];
+    for (int i=0; i < ICN_NUM; ++i) {
+      if (def_[i]) delete def_[i];
+    }
+
+    for (int i=0; i < RGB_NUM; ++i) {
+      if (rgb_[i]) delete rgb_[i];
     }
   }
 
@@ -358,10 +505,10 @@ public:
       ti->clear_children();
 
       if (ti->user_data() == reinterpret_cast<void *>(TYPE_LINK)) {
-        ti->usericon(usericon(TYPE_LOCKED_LINK));
+        ti->usericon(rgb_[RGB_LLK]);
         ti->user_data(reinterpret_cast<void *>(TYPE_LOCKED_LINK));
       } else {
-        ti->usericon(usericon(TYPE_LOCKED));
+        ti->usericon(rgb_[RGB_LCK]);
         ti->user_data(reinterpret_cast<void *>(TYPE_LOCKED));
       }
     }
@@ -413,67 +560,48 @@ public:
   // load a set of default icons
   void load_default_icons()
   {
-    const char *data[TYPE_NUM] = {0};
-    data[TYPE_DEFAULT] = FOLDER_GENERIC_SVG_DATA;
-    data[TYPE_LINK] = FOLDER_LINK_SVG_DATA;
-    data[TYPE_LOCKED] = FOLDER_NOACCESS_SVG_DATA;
-    data[TYPE_LOCKED_LINK] = FOLDER_LINK_NOACCESS_SVG_DATA;
+    const char *data[ICN_NUM] = {
+      FOLDER_GENERIC_SVG_DATA,
+      OVERLAY_LINK_BIG_SVG_DATA,
+      OVERLAY_PADLOCK_BIG_SVG_DATA
+    };
 
-    for (int i=0; i < TYPE_NUM; ++i) {
-      if (!def_icon_[i]) {
-        def_icon_[i] = new Fl_SVG_Image(NULL, data[i]);
+    for (int i=0; i < ICN_NUM; ++i) {
+      if (def_[i]) delete def_[i];
+      def_[i] = new Fl_SVG_Image(NULL, data[i]);
+
+      if (!def_[i]) continue;
+
+      if (def_[i]->fail()) {
+        delete def_[i];
+        def_[i] = NULL;
+        continue;
       }
-      usericon(def_icon_[i], i);
-    }
-  }
-
-  // set usericon by index/type;
-  // force any call to usericon() method to accept only Fl_SVG_Image* as argument
-  void usericon(Fl_SVG_Image *svg, int idx=TYPE_DEFAULT)
-  {
-    if (!svg || svg->fail()) return;
-
-    switch(idx) {
-      case TYPE_DEFAULT:
-        icon_[idx] = svg;
-        icon_[idx]->resize(item_labelsize(), item_labelsize());
-        Fl_Tree::usericon(icon_[idx]);  // set default usericon
-        update_items();
-        break;
-      case TYPE_LINK:
-      case TYPE_LOCKED:
-      case TYPE_LOCKED_LINK:
-        icon_[idx] = svg;
-        icon_[idx]->resize(item_labelsize(), item_labelsize());
-        update_items();
-        break;
-      default:
-        break;
-    }
-  }
-
-  // get usericon by index/type
-  Fl_SVG_Image *usericon(int idx) const
-  {
-    switch(idx) {
-      case TYPE_LINK:
-      case TYPE_LOCKED:
-        if (icon_[idx]) return icon_[idx];
-        break;
-      case TYPE_LOCKED_LINK:
-        if (icon_[idx]) return icon_[idx];
-        if (icon_[TYPE_LOCKED]) return icon_[TYPE_LOCKED];
-        break;
-      default:
-        break;
+      usericon(def_[i], i);
     }
 
-    return icon_[TYPE_DEFAULT];
+    update_items(true);
   }
 
-  Fl_SVG_Image *usericon() const {
-    return icon_[TYPE_DEFAULT];
+  // set/get icons
+  void usericon(Fl_SVG_Image *svg) {
+    usericon(svg, ICN_DIR);
+    update_items(true);
   }
+
+  void overlay_link(Fl_SVG_Image *svg) {
+    usericon(svg, ICN_LNK);
+    update_items(true);
+  }
+
+  void overlay_lock(Fl_SVG_Image *svg) {
+    usericon(svg, ICN_LCK);
+    update_items(true);
+  }
+
+  Fl_SVG_Image *usericon() const { return icn_[ICN_DIR]; }
+  Fl_SVG_Image *overlay_link() const { return icn_[ICN_LNK]; }
+  Fl_SVG_Image *overlay_lock() const { return icn_[ICN_LCK]; }
 
   // set the labelsize on items including root()
   // and adjust the icon size accordingly too
@@ -481,17 +609,15 @@ public:
   {
     Fl_Tree::item_labelsize(val);
 
-    for (int i=0; i < TYPE_NUM; ++i) {
-      if (icon_[i]) {
-        icon_[i]->resize(val, val);
-      }
+    if (icn_[ICN_DIR]) {
+      icn_[ICN_DIR]->resize(val, val);
+      Fl_Tree::usericon(icn_[ICN_DIR]);
     }
 
-    if (icon_[TYPE_DEFAULT]) {
-      Fl_Tree::usericon(icon_[TYPE_DEFAULT]);
-    }
+    if (icn_[ICN_LNK]) icn_[ICN_LNK]->resize(val, val);
+    if (icn_[ICN_LCK]) icn_[ICN_LCK]->resize(val, val);
 
-    update_items();
+    update_items(true);
   }
 
   Fl_Fontsize item_labelsize() const { return Fl_Tree::item_labelsize(); }

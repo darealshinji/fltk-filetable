@@ -404,126 +404,19 @@
   "</svg>" \
   /**/
 
-#define FOLDER_LINK_SVG_DATA \
-  "<svg width='64' height='64' color-interpolation='linearRGB' version='1.1' xmlns='http://www.w3.org/2000/svg'>" \
-  "<path d='m42 61h6l4-4h4l6-6-14-4-6 14z' fill='#010101' fill-opacity='.396'/>" \
-  "<path d='m3 15 10 26 29 18 18-47-12-2-4 2-18-4-2 5-8-2-.09 8.2-12.91-4.2z' fill='none' stroke='#000' stroke-width='4'/>" \
-  "<linearGradient id='d' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#face79' offset='0'/>" \
-  "<stop stop-color='#bc4105' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m26 8-12 33 28 17 18-46-12-2-4 2-18-4z' fill='url(#d)'/>" \
-  "<linearGradient id='c' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#fff' offset='0'/>" \
-  "<stop stop-color='#8e8e8e' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m16 11v30l26 16 7-35-33-11z' fill='url(#c)'/>" \
-  "<linearGradient id='b' x1='78.34' x2='101.46' y1='-26.66' y2='12.94' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#9a9a9a' offset='0'/>" \
-  "<stop stop-color='#505050' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='M16 11L49 22L42 57L52 20.37L16 11z' fill='url(#b)'/>" \
-  "<linearGradient id='a' x1='88.52' x2='97.54' y1='9.59' y2='51.29' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#ffe2ac' offset='0'/>" \
-  "<stop stop-color='#f49806' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m3 15 10 26 29 18-4-29-35-15z' fill='url(#a)'/>" \
-  "<path d='M3 15L38 30L42 59L40.5 28L3 15z' fill='#a03d03'/>" \
-  "<g transform='matrix(1.6466 0 0 1.6466 1.084 .86265)' color-interpolation='linearRGB'>" \
-  "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.6416'/>" \
-  "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='#0ff' stroke-width='.69364'/>" \
-  "</g>" \
-  "</svg>" \
-  /**/
-
-#define FOLDER_LINK_NOACCESS_SVG_DATA \
-  "<svg width='64' height='64' color-interpolation='linearRGB' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'>" \
-  "<defs>" \
-  "<linearGradient id='d' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse' xlink:href='#b'/>" \
-  "<linearGradient id='c' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse' xlink:href='#a'/>" \
-  "</defs>" \
-  "<path d='m42 61h6l4-4h4l6-6-14-4-6 14z' fill='#010101' fill-opacity='.396'/>" \
-  "<path d='m3 15 10 26 29 18 18-47-12-2-4 2-18-4-2 5-8-2-.09 8.2-12.91-4.2z' fill='none' stroke='#000' stroke-width='4'/>" \
-  "<linearGradient id='b' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#face79' offset='0'/>" \
-  "<stop stop-color='#bc4105' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m26 8-12 33 28 17 18-46-12-2-4 2-18-4z' fill='url(#b)'/>" \
-  "<linearGradient id='a' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#fff' offset='0'/>" \
-  "<stop stop-color='#8e8e8e' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m16 11v30l26 16 7-35-33-11z' fill='url(#a)'/>" \
-  "<linearGradient id='f' x1='78.34' x2='101.46' y1='-26.66' y2='12.94' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#9a9a9a' offset='0'/>" \
-  "<stop stop-color='#505050' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='M16 11L49 22L42 57L52 20.37L16 11z' fill='url(#f)'/>" \
-  "<linearGradient id='e' x1='88.52' x2='97.54' y1='9.59' y2='51.29' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#ffe2ac' offset='0'/>" \
-  "<stop stop-color='#f49806' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m3 15 10 26 29 18-4-29-35-15z' fill='url(#e)'/>" \
-  "<path d='M3 15L38 30L42 59L40.5 28L3 15z' fill='#a03d03'/>" \
-  "<g transform='matrix(1.4805 0 0 1.4805 -30.621 -29.375)'>" \
-  "<path transform='matrix(1 0 0 .9473 0 3.2114)' d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='none' stroke='#000' stroke-width='4'/>" \
-  "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='#000' stroke-width='8'/>" \
-  "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='url(#d)' stroke-width='4'/>" \
-  "<path d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='url(#c)'/>" \
-  "<path d='m50 49c-1 0-2 1-2 2s0 1 1 2c0 2 0 3 1 3s1-1 1-3c1-1 1-1 1-2s-1-2-2-2z'/>" \
-  "<path d='m40 44h20' fill='none' stroke='#000'/>" \
-  "</g>" \
-  "<g transform='matrix(1.6466 0 0 1.6466 1.084 .86265)' color-interpolation='linearRGB'>" \
-  "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.6416'/>" \
-  "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='#0ff' stroke-width='.69364'/>" \
-  "</g>" \
-  "</svg>" \
-  /**/
-
-#define FOLDER_NOACCESS_SVG_DATA \
-  "<svg width='64' height='64' color-interpolation='linearRGB' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'>" \
-  "<defs>" \
-  "<linearGradient id='d' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse' xlink:href='#b'/>" \
-  "<linearGradient id='c' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse' xlink:href='#a'/>" \
-  "</defs>" \
-  "<path d='m42 61h6l4-4h4l6-6-14-4-6 14z' fill='#010101' fill-opacity='.396'/>" \
-  "<path d='m3 15 10 26 29 18 18-47-12-2-4 2-18-4-2 5-8-2-.09 8.2-12.91-4.2z' fill='none' stroke='#000' stroke-width='4'/>" \
-  "<linearGradient id='b' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#face79' offset='0'/>" \
-  "<stop stop-color='#bc4105' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m26 8-12 33 28 17 18-46-12-2-4 2-18-4z' fill='url(#b)'/>" \
-  "<linearGradient id='a' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#fff' offset='0'/>" \
-  "<stop stop-color='#8e8e8e' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m16 11v30l26 16 7-35-33-11z' fill='url(#a)'/>" \
-  "<linearGradient id='f' x1='78.34' x2='101.46' y1='-26.66' y2='12.94' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#9a9a9a' offset='0'/>" \
-  "<stop stop-color='#505050' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='M16 11L49 22L42 57L52 20.37L16 11z' fill='url(#f)'/>" \
-  "<linearGradient id='e' x1='88.52' x2='97.54' y1='9.59' y2='51.29' gradientUnits='userSpaceOnUse'>" \
-  "<stop stop-color='#ffe2ac' offset='0'/>" \
-  "<stop stop-color='#f49806' offset='1'/>" \
-  "</linearGradient>" \
-  "<path d='m3 15 10 26 29 18-4-29-35-15z' fill='url(#e)'/>" \
-  "<path d='M3 15L38 30L42 59L40.5 28L3 15z' fill='#a03d03'/>" \
-  "<g transform='matrix(1.4805 0 0 1.4805 -30.621 -29.375)'>" \
-  "<path transform='matrix(1 0 0 .9473 0 3.2114)' d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='none' stroke='#000' stroke-width='4'/>" \
-  "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='#000' stroke-width='8'/>" \
-  "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='url(#d)' stroke-width='4'/>" \
-  "<path d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='url(#c)'/>" \
-  "<path d='m50 49c-1 0-2 1-2 2s0 1 1 2c0 2 0 3 1 3s1-1 1-3c1-1 1-1 1-2s-1-2-2-2z'/>" \
-  "<path d='m40 44h20' fill='none' stroke='#000'/>" \
-  "</g>" \
-  "</svg>" \
-  /**/
-
 #define OVERLAY_LINK_SVG_DATA \
   "<svg width='64' height='64' color-interpolation='linearRGB' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'>" \
   "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.6416'/>" \
   "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='#0ff' stroke-width='.69364'/>" \
+  "</svg>" \
+  /**/
+
+#define OVERLAY_LINK_BIG_SVG_DATA \
+  "<svg width='64' height='64' color-interpolation='linearRGB' version='1.1' xmlns='http://www.w3.org/2000/svg'>" \
+  "<g transform='matrix(1.6466 0 0 1.6466 1.084 .86265)' color-interpolation='linearRGB'>" \
+  "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='none' stroke='#000' stroke-linecap='round' stroke-linejoin='round' stroke-width='3.6416'/>" \
+  "<path d='m17.081 15.693c-8.4347 0-15.26 3.1006-15.26 6.9364 0-7.6648 6.8324-13.873 15.26-13.873v-6.9364l11.098 10.405-11.098 10.405z' fill='#0ff' stroke-width='.69364'/>" \
+  "</g>" \
   "</svg>" \
   /**/
 
@@ -540,6 +433,29 @@
   "</linearGradient>" \
   "</defs>" \
   "<g transform='matrix(1.0184 0 0 1.0184 -1.1056 -.81075)'>" \
+  "<path transform='matrix(1 0 0 .9473 0 3.2114)' d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='none' stroke='#000' stroke-width='4'/>" \
+  "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='#000' stroke-width='8'/>" \
+  "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='url(#b)' stroke-width='4'/>" \
+  "<path d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='url(#a)'/>" \
+  "<path d='m50 49c-1 0-2 1-2 2s0 1 1 2c0 2 0 3 1 3s1-1 1-3c1-1 1-1 1-2s-1-2-2-2z'/>" \
+  "<path d='m40 44h20' fill='none' stroke='#000'/>" \
+  "</g>" \
+  "</svg>" \
+  /**/
+
+#define OVERLAY_PADLOCK_BIG_SVG_DATA \
+  "<svg width='64' height='64' color-interpolation='linearRGB' version='1.1' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'>" \
+  "<defs>" \
+  "<linearGradient id='b' x1='102.6' x2='102.74' y1='8.5' y2='47.07' gradientUnits='userSpaceOnUse'>" \
+  "<stop stop-color='#face79' offset='0'/>" \
+  "<stop stop-color='#bc4105' offset='1'/>" \
+  "</linearGradient>" \
+  "<linearGradient id='a' x1='103.24' x2='103.39' y1='12.68' y2='55.34' gradientUnits='userSpaceOnUse'>" \
+  "<stop stop-color='#fff' offset='0'/>" \
+  "<stop stop-color='#8e8e8e' offset='1'/>" \
+  "</linearGradient>" \
+  "</defs>" \
+  "<g transform='matrix(1.4805 0 0 1.4805 -30.621 -29.375)'>" \
   "<path transform='matrix(1 0 0 .9473 0 3.2114)' d='m40 56c-4-4 0-12 0-12h20s4 8 0 12-16 4-20 0z' fill='none' stroke='#000' stroke-width='4'/>" \
   "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='#000' stroke-width='8'/>" \
   "<path d='m44 48v-8s0-4 6-4 6 4 6 4v8z' fill='none' stroke='url(#b)' stroke-width='4'/>" \
