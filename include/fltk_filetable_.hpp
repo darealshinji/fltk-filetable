@@ -46,15 +46,12 @@
 
 #include "svg_data.h"
 
-// make it possible to set these?
-#define STR_NAME       "Name"
-#define STR_SIZE       "Size"
-#define STR_LAST_MOD   "Last modified"
-#define STR_BYTES      "bytes"
-#define STR_KBYTES     "KiB"
-#define STR_MBYTES     "MiB"
-#define STR_GBYTES     "GiB"
-#define STR_ELEMENTS   "elements"
+#ifndef FLTK_FMT_INT
+#define FLTK_FMT_INT   "%ld"
+#endif
+#ifndef FLTK_FMT_FLOAT
+#define FLTK_FMT_FLOAT "%.1Lf"
+#endif
 
 
 namespace fltk
@@ -62,16 +59,24 @@ namespace fltk
 
 class filetable_ : public Fl_Table_Row
 {
-private:
-  friend class dirtree;
-
 public:
   // columns
   enum {
-    COL_NAME = 0,
-    COL_SIZE = 1,
-    COL_LAST_MOD = 2,
+    COL_NAME = 0,      // Name
+    COL_SIZE = 1,      // Size
+    COL_LAST_MOD = 2,  // Last modified
     COL_MAX = 3
+  };
+
+  // size column strings
+  enum {
+    STR_SIZE_ELEMENTS = 0,  // n elements
+    STR_SIZE_BYTES = 1,     // n bytes
+    STR_SIZE_KBYTES = 2,    // n kiB
+    STR_SIZE_MBYTES = 3,    // n MiB
+    STR_SIZE_GBYTES = 4,    // n GiB
+    STR_SIZE_TBYTES = 5,    // n TiB
+    STR_SIZE_MAX = 6
   };
 
 protected:
@@ -151,19 +156,61 @@ private:
     }
   };
 
+  // sort in reverse order or not
   int sort_reverse_ = 0;
-  int sort_last_row_ = 0;
+
+  // number of last column that was sorted
+  int last_row_sorted_ = 0;
+
+  // double click timeout in seconds
   double dc_timeout_ = 0.8;
+
+  // autowidth
   int autowidth_padding_ = 20;
   int autowidth_max_ = 0;
+
+  // show hidden files or not
   bool show_hidden_ = false;
+
+  // save the known number of directory entries to this value on a
+  // double click before loading so we can use it to reserve space
+  // in the rowdata_ vector, as an attempt to reduce unneeded reallocation
+  ulong reserve_entries_ = 0;
+
+  // list of filename extensions to filter in
   std::vector<std::string> filter_list_;
 
+  // icons used for a filename "blend-over" effect;
+  // 2 colors for selected and unselected row
   Fl_SVG_Image *icon_blend_[2];
-  const char *label_header_[COL_MAX];
+
+  // size of the filename "blend-over" area in pixels;
+  // 0 will disable this effect
+  int blend_w_ = 8;
+
+  // labels of the header entries
+  const char *label_header_[COL_MAX] = {
+    "Name", "Size", "Last modified"
+  };
+
+  // labels used for the file sizes
+  std::string filesize_label_[STR_SIZE_MAX] =
+  {
+    FLTK_FMT_INT   " elements ",
+    FLTK_FMT_INT   " bytes ",
+    FLTK_FMT_FLOAT " KiB ",
+    FLTK_FMT_FLOAT " MiB ",
+    FLTK_FMT_FLOAT " GiB ",
+    FLTK_FMT_FLOAT " TiB "
+  };
+
+  // this string is used to be strdup()ed instread of being
+  // created with printf_alloc() each time
+  std::string str_unknown_elements_ = "?? elements ";
+
 
   // extra width for icons
-  int col_name_extra_w() const {
+  inline int col_name_extra_w() const {
     return labelsize() + 10;
   }
 
@@ -180,7 +227,7 @@ private:
 
     if (callback_context() == CONTEXT_COL_HEADER) {
       if (Fl::event() == FL_RELEASE && Fl::event_button() == 1) {
-        if (sort_last_row_ == col) {
+        if (last_row_sorted_ == col) {
           // Click same column? Toggle sort
           sort_reverse_ ^= 1;
         } else {
@@ -188,7 +235,7 @@ private:
           sort_reverse_ = 0;
         }
         sort_column(col, sort_reverse_);
-        sort_last_row_ = col;
+        last_row_sorted_ = col;
       }
       last_row_clicked_ = -1;
       return;
@@ -211,8 +258,36 @@ protected:
   Fl_SVG_Image *svg_link_ = NULL;
   Fl_SVG_Image *svg_noaccess_ = NULL;
 
-  bool empty(const char *val) {
+  // check if const char * is empty
+  inline bool empty(const char *val) {
     return (!val || *val == 0) ? true : false;
+  }
+
+  // format localization string using "{}" as replacement for a variable:
+  // replace first occurance of "{}" in "str" with "format";
+  // i.e. str="{} bytes" and format="%ld" returns "%ld bytes "
+  std::string format_localization(const char *str, const char *format, bool add_space=true)
+  {
+    if (empty(str)) return "";
+    if (empty(format)) return str;
+
+    std::string s;
+    const char *p = str;
+
+    while (*p) {
+      if (*p == '{' && *(p+1) == '}') {
+        p += 2;
+        s.append(format);
+        s.append(p);
+        break;
+      }
+      s.push_back(*p);
+      p++;
+    }
+
+    if (add_space) s.push_back(' ');
+
+    return s;
   }
 
   // return a generic SVG icon by idx/enum
@@ -245,20 +320,34 @@ protected:
   // Handle drawing all cells in table
   void draw_cell(TableContext context, int R=0, int C=0, int X=0, int Y=0, int W=0, int H=0)
   {
-    const int icon_blend_W = 8;
-
     if (C >= COL_MAX) {
       return;
     }
 
     switch (context) {
+/*
+      case CONTEXT_ENDPAGE:
+        // create a gray stripe on the height of the column headers
+        // issue: will overlay scroll bars
+        fl_push_clip(tox, wiy, tow, col_header_height());
+          fl_draw_box(FL_THIN_UP_BOX, tox, wiy, tow, col_header_height(), FL_BACKGROUND_COLOR);
+        fl_pop_clip();
+
+        // redraw column headers to become visible again
+        for (int i=0; i < COL_MAX; ++i) {
+          int hX, hY, hW, hH;
+          find_cell(CONTEXT_COL_HEADER, 0, i, hX, hY, hW, hH);
+          draw_cell(CONTEXT_COL_HEADER, 0, i, hX, hY, hW, hH);
+        }
+        break;
+*/
       case CONTEXT_COL_HEADER:
         fl_push_clip(X, Y, W, H); {
           fl_draw_box(FL_THIN_UP_BOX, X, Y, W, H, FL_BACKGROUND_COLOR);
           fl_font(labelfont(), labelsize());
           fl_color(FL_BLACK);
           fl_draw(label_header_[C], X + 2, Y, W, H, FL_ALIGN_LEFT, NULL, 0);  // +2=pad left
-          if (C == sort_last_row_) {
+          if (C == last_row_sorted_) {
             draw_sort_arrow(X, Y, W, H);
           }
         }
@@ -319,9 +408,9 @@ protected:
           fl_draw(rowdata_.at(R).cols[C], X, Y + 2, W, H - 2, al, NULL, 0);
 
           // blend over long text at the end of name column
-          if (C == COL_NAME && svg && fw > W) {
-            if (svg->w() != icon_blend_W || svg->h() != H) {
-              svg->resize(icon_blend_W, H);
+          if (C == COL_NAME && svg && fw > W && blend_w() > 0) {
+            if (svg->w() != blend_w() || svg->h() != H) {
+              svg->resize(blend_w(), H);
               col_resize_min(col_name_extra_w() + svg->w());
             }
             svg->draw(X + W - (col_name_extra_w() + svg->w()), Y);
@@ -356,11 +445,11 @@ protected:
 
   void draw_sort_arrow(int X,int Y,int W,int H)
   {
-    int xlft = X + (W - 6) - 8;
-    int xctr = X + (W - 6) - 4;
-    int xrit = X + (W - 6) - 0;
-    int ytop = Y + (H / 2) - 4;
-    int ybot = Y + (H / 2) + 4;
+    const int xlft = X + (W - 6) - 8;
+    const int xctr = X + (W - 6) - 4;
+    const int xrit = X + (W - 6) - 0;
+    const int ytop = Y + (H / 2) - 4;
+    const int ybot = Y + (H / 2) + 4;
 
     if (sort_reverse_) {
       // Engraved down arrow
@@ -382,22 +471,24 @@ protected:
   int handle(int event)
   {
     int ret = Fl_Table_Row::handle(event);
-    int row = callback_row();
+    reserve_entries_ = 0;
 
     if (callback_context() == CONTEXT_CELL) {
       if (event == FL_RELEASE) {
-        if (dc_timeout_ == 0) {   // double click disabled
+        if (dc_timeout_ == 0) {   // double click was disabled
+          reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
           double_click_callback();
-        } else if (last_row_clicked_ == row && within_double_click_timelimit_) {  // double click
+        } else if (last_row_clicked_ == callback_row() && within_double_click_timelimit_) {  // double click
           Fl::remove_timeout(reset_timelimit_cb);
           within_double_click_timelimit_ = false;
+          reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
           double_click_callback();
         } else {
           Fl::remove_timeout(reset_timelimit_cb);
           within_double_click_timelimit_ = true;
           Fl::add_timeout(dc_timeout_, reset_timelimit_cb);
         }
-        last_row_clicked_ = row;
+        last_row_clicked_ = callback_row();
       }
     } else {
       // not clicked on a cell -> remove timout
@@ -410,40 +501,19 @@ protected:
     return ret;
   }
 
-  std::string last_clicked_item()
-  {
-    std::string s;
-
-    if (open_directory_.empty()) {
-      s = rowdata_[last_row_clicked_].cols[COL_NAME];
-    } else {
-      s = open_directory_;
-      if (s.back() != '/') s.push_back('/');
-      s += rowdata_[last_row_clicked_].cols[COL_NAME];
-    }
-
-    return s;
-  }
-
-  bool last_clicked_item_isdir() {
-    return rowdata_[last_row_clicked_].isdir();
-  }
-
   // set a callback to handle double-clicks on entries
   virtual void double_click_callback()
   {
-    if (!last_clicked_item_isdir()) {
+    if (last_clicked_item_isdir()) {
+      load_dir(last_clicked_item().c_str());
+    } else {
       selection_ = last_clicked_item();
       window()->hide();
-      return;
     }
-
-    load_dir(last_clicked_item().c_str());
   }
 
-  // return pointer to icon set for row entry;
-  // setting the icons is done in sub-classes
-  virtual Fl_SVG_Image *icon(Row_t) const { return NULL; }
+  // return pointer to icon set for row entry
+  virtual Fl_SVG_Image *icon(Row_t) const = 0;
 
   // similar to printf() but returns an allocated string
   static char *printf_alloc(const char *fmt, ...)
@@ -464,145 +534,97 @@ protected:
   // return values must be free()d later
   char *human_readable_filesize(long bytes)
   {
-    const int KiBYTES = 1024;
-    const int MiBYTES = 1024 * KiBYTES;
-    const int GiBYTES = 1024 * MiBYTES;
+    const long s_kiB = 1024;
+    const long s_MiB = 1024 * s_kiB;
+    const long s_GiB = 1024 * s_MiB;
+    const long s_TiB = 1024 * s_GiB;
+    long double ld = bytes;
+    int idx = STR_SIZE_BYTES;
 
-    if (bytes > GiBYTES) {
-      return printf_alloc("%.1Lf " STR_GBYTES " ", static_cast<long double>(bytes) / GiBYTES);
-    } else if (bytes > MiBYTES) {
-      return printf_alloc("%.1Lf " STR_MBYTES " ", static_cast<long double>(bytes) / MiBYTES);
-    } else if (bytes > KiBYTES) {
-      return printf_alloc("%.1Lf " STR_KBYTES " ", static_cast<long double>(bytes) / KiBYTES);
+    switch (bytes) {
+      // GiB
+      case s_GiB ... s_TiB-1:
+        idx = STR_SIZE_GBYTES;
+        ld /= s_GiB;
+        break;
+
+      // MiB
+      case s_MiB ... s_GiB-1:
+        idx = STR_SIZE_MBYTES;
+        ld /= s_MiB;
+        break;
+
+      // kiB
+      case s_kiB ... s_MiB-1:
+        idx = STR_SIZE_KBYTES;
+        ld /= s_kiB;
+        break;
+
+      // bytes
+      case 0 ... s_kiB-1:
+        return printf_alloc(filesize_label_[STR_SIZE_BYTES].c_str(), bytes);
+        break;
+
+      default:
+        // TiB
+        if (bytes >= s_TiB) {
+          idx = STR_SIZE_TBYTES;
+          ld /= s_TiB;
+        } else {
+          return printf_alloc(filesize_label_[STR_SIZE_BYTES].c_str(), bytes);
+        }
+        break;
     }
 
-    return printf_alloc("%ld " STR_BYTES " ", bytes);
+    return printf_alloc(filesize_label_[idx].c_str(), ld);
   }
 
   char *count_dir_entries(long &count, const char *directory)
   {
-    const char *unknown = "?? " STR_ELEMENTS " ";
-    char *buf;
+    DIR *d;
+    struct dirent *dir;
 
     if (empty(directory)) {
+      count = -1;
       return NULL;
     }
 
-    std::string path = open_directory_;
-    path.push_back('/');
-    path += directory;
+    { std::string temp;
+      temp.reserve(open_directory_.size() + strlen(directory) + 1);
+      temp = open_directory_ + "/" + directory;
 
-    DIR *dirp = opendir(path.c_str());
+      if ((d = opendir(temp.c_str())) == NULL) {
+        count = -1;
+        return strdup(str_unknown_elements_.c_str());
+      }
+    }  // end temp
 
-    if (!dirp) {
-      count = -1;
-      return strdup(unknown);
-    }
+    count = errno = 0;
 
-    count = 0;
-    errno = 0;
+    while ((dir = readdir(d)) != NULL)
+    {
+      // handle hidden files
+      if (dir->d_name[0] == '.' && !show_hidden()) {
+        continue;
+      }
 
-    while (readdir(dirp)) {
+      // no "." and ".." entries
+      if (show_hidden() && (strcmp(dir->d_name, ".") == 0 || strcmp(dir->d_name, "..") == 0)) {
+        continue;
+      }
+
       count++;
     }
 
-    count -= 2;  // don't count the '.' and '..' entries
+    int errsv = errno;
+    closedir(d);
 
-    if (errno != 0 || count < 0) {
-      buf = strdup(unknown);
+    if (errsv != 0 || count < 0) {
       count = -1;
-    } else {
-      buf = printf_alloc("%ld " STR_ELEMENTS " ", count);
+      return strdup(str_unknown_elements_.c_str());
     }
 
-    closedir(dirp);
-
-    return buf;
-  }
-
-  // resolve '.' and '..' but don't follow symlinks;
-  // returns allocated string (must be free()d later) or NULL on error
-  static char *simplify_directory_path(const char *path)
-  {
-    std::vector<std::string> vec;
-    std::string in, out;
-
-    if (!path || *path == 0) {
-      return NULL;
-    }
-
-    in = path;
-
-    // strip trailing '/'
-    while (in.back() == '/') {
-      in.pop_back();
-    }
-
-    // path was only slashes
-    if (in.empty()) {
-      return strdup("/");
-    }
-
-    if (in == ".") {
-      return get_current_dir_name();
-    }
-
-    // prepend current directory
-    if (in[0] != '/') {
-      char *cdn = get_current_dir_name();
-      if (!cdn) return NULL;
-
-      in.insert(0, 1, '/');
-      in.insert(0, cdn);
-      free(cdn);
-    }
-
-    // insert trailing '/' (it's needed)
-    in.push_back('/');
-
-    // check if the path even needs to be simplified
-    if (in.find("//") == std::string::npos &&
-        in.find("/./") == std::string::npos &&
-        in.find("/../") == std::string::npos)
-    {
-      in.pop_back();  // remove trailing '/'
-      return strdup(in.c_str());
-    }
-
-    for (size_t i = 0; i < in.size(); ++i) {
-      std::string dir;
-
-      while (in[i] == '/') {
-        i++;
-      }
-
-      while (in[i] != '/') {
-        dir.push_back(in[i]);
-        i++;
-      }
-
-      if (dir == "..") {
-        // remove last entry or ignore
-        if (vec.size() > 0) vec.pop_back();
-      } else if (dir == ".") {
-        // ignore '.' entry
-        continue;
-      } else if (dir.size() > 0) {
-        vec.push_back(dir);
-      }
-    }
-
-    // path was resolved to "/"
-    if (vec.size() == 0) {
-      return strdup("/");
-    }
-
-    for (const auto elem : vec) {
-      out.push_back('/');
-      out += elem;
-    }
-
-    return strdup(out.c_str());
+    return printf_alloc(filesize_label_[STR_SIZE_ELEMENTS].c_str(), count);
   }
 
   // returns true if the current filename is accepted by the
@@ -676,13 +698,10 @@ protected:
   }
 
 public:
+  // c'tor
   filetable_(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Table_Row(X, Y, W, H, L)
   {
-    label_header_[COL_NAME] = STR_NAME;
-    label_header_[COL_SIZE] = STR_SIZE;
-    label_header_[COL_LAST_MOD] = STR_LAST_MOD;
-
     color(FL_WHITE, fl_rgb_color(0x41, 0x69, 0xE1));
 
     // icon_blend_[0]
@@ -698,11 +717,12 @@ public:
       "</svg>";
 
     icon_blend_[0] = new Fl_SVG_Image(NULL, svg_data1);
-    icon_blend_[0]->proportional = false;
 
     if (icon_blend_[0]->fail()) {
       delete icon_blend_[0];
       icon_blend_[0] = NULL;
+    } else {
+      icon_blend_[0]->proportional = false;
     }
 
     // icon_blend_[1]
@@ -718,16 +738,18 @@ public:
       "</svg>";
 
     icon_blend_[1] = new Fl_SVG_Image(NULL, svg_data2);
-    icon_blend_[1]->proportional = false;
 
     if (icon_blend_[1]->fail()) {
       delete icon_blend_[1];
       icon_blend_[1] = NULL;
+    } else {
+      icon_blend_[1]->proportional = false;
     }
 
     col_header(1);
     col_resize(1);
     col_resize_min(col_name_extra_w() + labelsize());
+    autowidth_max(W - col_name_extra_w());
 
     when(FL_WHEN_RELEASE);
 
@@ -735,7 +757,8 @@ public:
     callback(event_callback, NULL);
   }
 
-  ~filetable_()
+  // d'tor
+  virtual ~filetable_()
   {
     clear();
     if (icon_blend_[0]) delete icon_blend_[0];
@@ -744,21 +767,99 @@ public:
 
   void clear()
   {
+    last_row_clicked_ = -1;
+
     Fl_Table_Row::clear();
 
-    // clear rowdata_ entirely
-
-    while (rowdata_.size() > 0) {
+    // clear rowdata_ and free entries
+    for (const auto e : rowdata_) {
       for (int i = 0; i < COL_MAX; ++i) {
-        // free() each rowdata_.cols entry
-        if (rowdata_.back().cols[i]) {
-          free(rowdata_.back().cols[i]);
-        }
+        if (e.cols[i]) free(e.cols[i]);
       }
-      rowdata_.pop_back();
     }
 
     rowdata_.clear();
+  }
+
+  // resolve '.' and '..' but don't follow symlinks;
+  static std::string simplify_directory_path(std::string path)
+  {
+    std::vector<std::string> vec;
+
+    if (path.empty()) return "";
+
+    // strip trailing '/'
+    while (path.back() == '/') path.pop_back();
+
+    // path was only slashes
+    if (path.empty()) return "/";
+
+    // return current directory path
+    if (path == ".") {
+      char *p = get_current_dir_name();
+      if (!p) return "";
+      path = p;
+      free(p);
+      return path;
+    }
+
+    // prepend current directory
+    if (path.front() != '/') {
+      char *p = get_current_dir_name();
+      if (!p) return "";
+      path.insert(0, 1, '/');
+      path.insert(0, p);
+      free(p);
+    }
+
+    // insert trailing '/' (needed for the next 2 steps)
+    path.push_back('/');
+
+    // check if the path even needs to be simplified
+    if (path.find("//") == std::string::npos &&
+        path.find("/./") == std::string::npos &&
+        path.find("/../") == std::string::npos)
+    {
+      path.pop_back();  // remove trailing '/'
+      return path;
+    }
+
+    // reserve some space
+    vec.reserve(16);
+
+    // a trailing '/' in the input string is needed
+    for (auto it = path.cbegin(); it != path.cend(); ++it) {
+      if (*it == '/') continue;
+
+      std::string dir;
+
+      while (*it != '/') {
+        dir.push_back(*it);
+        it++;
+      }
+
+      if (dir == "..") {
+        // remove last entry or ignore
+        if (vec.size() > 0) vec.pop_back();
+      } else if (dir == ".") {
+        // ignore '.' entry
+        continue;
+      } else if (dir.size() > 0) {
+        vec.emplace_back(dir);
+      }
+    }
+
+    // path was resolved to "/"
+    if (vec.size() == 0) return "/";
+
+    path = "";
+
+    for (const auto elem : vec) {
+      path.push_back('/');
+      path.append(elem);
+    }
+
+    return path;
   }
 
   virtual bool load_dir() {
@@ -777,19 +878,19 @@ public:
       return false;
     }
 
-    { std::string new_dir;  // used only within this scope
+    { std::string new_dir;
 
-      if (dirname) {
+      if (empty(dirname)) {
+        new_dir = open_directory_;
+      } else {
         new_dir = simplify_directory_path(dirname);
 
         if (new_dir.empty()) {
           // fall back to using realpath() if needed
-          char *rp = realpath(dirname, NULL);
-          new_dir = rp ? rp : dirname;
-          free(rp);
+          char *p = realpath(dirname, NULL);
+          new_dir = p ? p : dirname;
+          free(p);
         }
-      } else {
-        new_dir = open_directory_;
       }
 
       if ((d = opendir(new_dir.c_str())) == NULL) {
@@ -806,6 +907,14 @@ public:
     // clear current table
     clear();
 
+    // reserve some space based on the known number of directory entries
+    if (reserve_entries_ > 0) {
+      if (reserve_entries_ > 2048) {
+        reserve_entries_ = 2048;  // cap this for safety
+      }
+      rowdata_.reserve(reserve_entries_);
+    }
+
     while ((dir = readdir(d)) != NULL) {
       struct stat st, lst;
       Row_t row;
@@ -813,7 +922,7 @@ public:
       int rv_lstat = -1;
 
       // handle hidden files
-      if (!show_hidden() && dir->d_name[0] == '.') {
+      if (dir->d_name[0] == '.' && !show_hidden()) {
         continue;
       }
 
@@ -845,9 +954,7 @@ public:
           row.cols[COL_SIZE] = count_dir_entries(row.bytes, dir->d_name);
         } else {
           // check for file extensions
-          if (!filter_show_entry(dir->d_name)) {
-            continue;
-          }
+          if (!filter_show_entry(dir->d_name)) continue;
 
           row.cols[COL_SIZE] = human_readable_filesize(st.st_size);
           row.bytes = st.st_size;
@@ -884,7 +991,7 @@ public:
       // name
       row.cols[COL_NAME] = strdup(dir->d_name);
 
-      rowdata_.push_back(row);
+      rowdata_.emplace_back(row);
     }
 
     closedir(d);
@@ -903,16 +1010,9 @@ public:
 
   virtual bool dir_up()
   {
-    if (open_directory_.empty()) {
-      return load_dir("..");
-    }
-
-    if (open_directory_ == "/") {
-      return false;
-    }
-
+    if (open_directory_.empty()) return load_dir("..");
+    if (open_directory_ == "/") return false;
     std::string dir(open_directory_ + "/..");
-
     return load_dir(dir.c_str());
   }
 
@@ -958,22 +1058,18 @@ public:
   // add file extension to filter
   void add_filter(const char *str)
   {
-    if (empty(str)) {
-      return;
+    if (empty(str)) return;
+
+    if (str[0] == '.') {
+      filter_list_.emplace_back(str);
+    } else {
+      filter_list_.emplace_back(std::string(".") + str);
     }
-
-    std::string ext;
-    if (str[0] != '.') ext = ".";
-    ext += str;
-
-    filter_list_.push_back(ext);
   }
 
   // add file extensions to filter
   void add_filter_list(const char *list, const char *delim)
   {
-    char *tok;
-
     if (empty(list) || empty(delim)) {
       return;
     }
@@ -981,40 +1077,89 @@ public:
     char *copy = strdup(list);
 
     for (char *str = copy; ; str = NULL) {
-      if ((tok = strtok(str, delim)) == NULL) {
-        break;
-      }
-
+      char *tok = strtok(str, delim);
+      if (!tok) break;
       add_filter(tok);
     }
-
     free(copy);
+  }
+
+  std::string last_clicked_item()
+  {
+    char * const name = rowdata_.at(last_row_clicked_).cols[COL_NAME];
+
+    if (open_directory_.empty()) {
+      return simplify_directory_path(name);
+    }
+
+    std::string s;
+    s.reserve(open_directory_.size() + strlen(name) + 1);
+
+    s = open_directory_;
+    if (s.back() != '/') s.push_back('/');
+    s.append(rowdata_.at(last_row_clicked_).cols[COL_NAME]);
+
+    return simplify_directory_path(s);
+  }
+
+  bool last_clicked_item_isdir() const {
+    return rowdata_.at(last_row_clicked_).isdir();
   }
 
   const char *open_directory() const {
     return open_directory_.empty() ? NULL : open_directory_.c_str();
   }
 
-  virtual void load_default_icons() {}
+  bool open_directory_is_root() const {
+    return open_directory_.compare("/") == 0;
+  }
+
+  virtual void load_default_icons() = 0;
 
   // set
+
   void label_header(int idx, const char *l) {
     if (idx >= 0 && idx < COL_MAX) {
       label_header_[idx] = l;
     }
   }
 
+  void filesize_label(int idx, const char *l)
+  {
+    if (idx < 0 || idx >= STR_SIZE_MAX) {
+      return;
+    }
+
+    switch (idx) {
+      case STR_SIZE_ELEMENTS:
+        str_unknown_elements_ = format_localization(l, "??");
+      case STR_SIZE_BYTES:
+        filesize_label_[idx] = format_localization(l, FLTK_FMT_INT);
+        break;
+      default:
+        filesize_label_[idx] = format_localization(l, FLTK_FMT_FLOAT);
+        break;
+    }
+  }
+
   void autowidth_padding(int i) { autowidth_padding_ = (i < 0) ? 0 : i; }
   void autowidth_max(int i) { autowidth_max_ = i; }
+  void blend_w(int i) { blend_w_ = i; }
   void show_hidden(bool b) { show_hidden_ = b; }
 
   // get
+
   const char *label_header(int idx) const {
     return (idx >= 0 && idx < COL_MAX) ? label_header_[idx] : NULL;
   }
 
+  const char *filesize_label(int idx) const {
+    return (idx >= 0 && idx < STR_SIZE_MAX && !filesize_label_[idx].empty()) ? filesize_label_[idx].c_str() : NULL;
+  }
+
   int autowidth_padding() const { return autowidth_padding_; }
   int autowidth_max() const { return autowidth_max_; }
+  int blend_w() const { return blend_w_; }
   bool show_hidden() const { return show_hidden_; }
 };
 

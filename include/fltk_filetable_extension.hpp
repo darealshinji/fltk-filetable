@@ -48,7 +48,7 @@ private:
   Fl_SVG_Image *icn_[ICN_LOCK + 1];
   std::vector<icn_t> icn_custom_;
 
-  Fl_SVG_Image *icon(Row_t r) const
+  Fl_SVG_Image *icon(Row_t r) const override
   {
     if (r.isdir()) {
       return icn_[ICN_DIR];
@@ -64,8 +64,8 @@ private:
 
     size_t len = strlen(r.cols[COL_NAME]);
 
-    for (const auto & icn : icn_custom_) {
-      for (const auto & ext : icn.list) {
+    for (const auto &icn : icn_custom_) {
+      for (const auto &ext : icn.list) {
         if (ext.size() >= len) {
           continue;
         }
@@ -89,7 +89,7 @@ public:
     svg_noaccess_ = icn_[ICN_LOCK];
   }
 
-  ~filetable_extension()
+  virtual ~filetable_extension()
   {
     for (size_t i=0; i < (sizeof(icn_)/sizeof(*icn_)); ++i) {
       if (icn_[i]) delete icn_[i];
@@ -175,7 +175,7 @@ public:
   }
 
   // load a set of default icons
-  void load_default_icons()
+  void load_default_icons() override
   {
 #ifdef SVG_DATA_H
     set_icon(NULL, default_icon_data(ICN_DIR), ICN_DIR);

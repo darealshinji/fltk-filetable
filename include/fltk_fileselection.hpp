@@ -26,7 +26,10 @@
 #define fltk_fileselection_hpp
 
 #include <FL/Fl.H>
+#include <FL/Fl_Box.H>
+#include <FL/Fl_Button.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Tile.H>
 #include <string>
 
 #include "fltk_dirtree.hpp"
@@ -52,36 +55,40 @@ private:
   class filetable_sub : public T0
   {
   private:
-    dirtree *tree_ptr;
-    std::string *selection_ptr;
+    fileselection *fs_ptr;
 
-    void double_click_callback()
-    {
-      if (this->last_clicked_item_isdir()) {
-        std::string s(this->last_clicked_item());  // need to save this temporarily
-        this->load_dir(s.c_str());
-        tree_ptr->load_dir(s.c_str());
-        tree_ptr->show_item(tree_ptr->find_item(s.c_str()));  // scroll down tree
-      } else {
-        *selection_ptr = this->last_clicked_item();  // save selection
-        this->window()->hide();
-      }
+    void double_click_callback() override {
+      fs_ptr->double_click_callback();
     }
 
   public:
-    filetable_sub(int X, int Y, int W, int H, dirtree *tree, std::string *selection)
-    : T0(X,Y,W,H,NULL)
-    {
-      tree_ptr = tree;
-      selection_ptr = selection;
+    filetable_sub(int X, int Y, int W, int H, fileselection *fs) : T0(X,Y,W,H,NULL) {
+      fs_ptr = fs;
     }
   };
-
-  friend class filetable_sub<T>;
 
   std::string selection_;
   dirtree *tree_;
   filetable_sub<T> *table_;
+
+  Fl_Group *g_top;
+  Fl_Tile *g_main;
+  Fl_Button *b_up;
+  Fl_Box *g_top_dummy;
+
+  virtual void double_click_callback()
+  {
+    if (table_->last_clicked_item_isdir()) {
+      load_dir(table_->last_clicked_item().c_str());
+    } else {
+      selection_ = table_->last_clicked_item();
+      window()->hide();
+    }
+  }
+
+  static void up_callback(Fl_Widget *, void *v) {
+    reinterpret_cast<fileselection *>(v)->dir_up();
+  }
 
   static void tree_callback(Fl_Widget *, void *v) {
     reinterpret_cast<fileselection *>(v)->tree_callback2();
@@ -92,7 +99,9 @@ private:
     switch(tree_->callback_reason()) {
       case FL_TREE_REASON_RESELECTED:
       case FL_TREE_REASON_SELECTED:
-        load_dir(tree_->callback_item_path());
+        if (!load_dir(tree_->callback_item_path())) {
+          tree_->open_callback_item();  // sets the item as "no access"
+        }
         break;
       case FL_TREE_REASON_OPENED:
         tree_->open_callback_item();
@@ -105,31 +114,87 @@ private:
     }
   }
 
+  // helper method for load_dir() and dir_up()
+  bool load_open_directory()
+  {
+    if (table_->open_directory_is_root()) {
+      b_up->deactivate();
+    } else {
+      b_up->activate();
+    }
+
+    bool rv = tree_->load_dir(table_->open_directory());
+
+    // scroll down tree
+    if (rv) tree_->show_item(tree_->find_item(table_->open_directory()));
+
+    return rv;
+  }
+
 public:
   fileselection(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Group(X,Y,W,H,L)
   {
-    tree_ = new dirtree(X, Y, W * 0.25, H);
-    tree_->callback(tree_callback, this);
-    tree_->load_default_icons();
+    // top bar with buttons and such
+    g_top = new Fl_Group(X, Y, W, 46);
+    {
+      b_up = new Fl_Button(X, Y, 42, 42, "Up");
+      b_up->callback(up_callback, this);
 
-    table_ = new filetable_sub<T>(X + tree_->w(), Y, W + tree_->w(), H, tree_, &selection_);
-    table_->load_default_icons();
+      g_top_dummy = new Fl_Box(X + b_up->w(), Y, 1, 1);
+    }
+    g_top->end();
+    g_top->resizable(g_top_dummy);
 
-    resizable(table_);
+    int nx = X;
+    int ny = Y + g_top->h();
+    int nw = W;
+    int nh = H - g_top->h();
+
+    // main part with tree and filetable
+    g_main = new Fl_Tile(nx,ny,nw,nh);
+    {
+      nw *= 0.25;
+      tree_ = new dirtree(nx,ny,nw,nh);
+      tree_->callback(tree_callback, this);
+      tree_->load_default_icons();
+
+      nx += tree_->w();
+      nw = g_main->w() - nw;
+      table_ = new filetable_sub<T>(nx,ny,nw,nh, this);
+      table_->load_default_icons();
+    }
+    g_main->end();
+
     end();
+    resizable(g_main);
   }
 
-  ~fileselection() {
+  virtual ~fileselection()
+  {
     delete tree_;
     delete table_;
   }
 
-  bool load_dir(const char *dirname) {
-    // call dirtree::load_dir() only when filetable_::load_dir() succeeded
-    return (table_->load_dir(dirname) && tree_->load_dir(dirname));
+  // calls load_dir() on table_ and tree_
+  bool load_dir(const char *dirname)
+  {
+    if (!table_->load_dir(dirname)) {
+      return false;
+    }
+    return load_open_directory();
   }
 
+  // move directory up (table_ and tree_)
+  bool dir_up()
+  {
+    if (!table_->dir_up()) {
+      return false;
+    }
+    return load_open_directory();
+  }
+
+  // returns selection
   const char *selection() {
     return selection_.empty() ? NULL : selection_.c_str();
   }

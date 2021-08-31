@@ -46,7 +46,7 @@ private:
 
   svg_t icn_[ICN_LAST];
 
-  Fl_SVG_Image *icon(Row_t r) const
+  Fl_SVG_Image *icon(Row_t r) const override
   {
     switch (r.type) {
       case 'D':
@@ -78,7 +78,7 @@ public:
     svg_noaccess_ = icn_[ICN_LOCK].svg;
   }
 
-  ~filetable_simple()
+  virtual ~filetable_simple()
   {
     for (int i = 0; i < ICN_LAST; ++i) {
       if (icn_[i].alloc && icn_[i].svg) {
@@ -101,7 +101,7 @@ public:
     return filetable_::load_dir(dirname);
   }
 
-  bool load_dir() {
+  bool load_dir() override {
     return load_dir(".");
   }
 
@@ -138,7 +138,7 @@ public:
   }
 
   // load a set of default icons
-  void load_default_icons()
+  void load_default_icons() override
   {
 #ifdef SVG_DATA_H
     for (int i=0; i < ICN_LAST; ++i) {

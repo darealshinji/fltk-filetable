@@ -32,8 +32,8 @@ int main()
 {
   Fl_Double_Window win(800, 600, "Test");
 
-  fltk::fileselection<fltk::filetable_magic> sel(0, 0, win.w(), win.h());
-  sel.load_dir("/home/djcj");
+  fltk::fileselection<fltk::filetable_magic> sel(10, 10, win.w()-20, win.h()-20);
+  sel.load_dir("./../.");
 
   win.end();
   win.resizable(sel);

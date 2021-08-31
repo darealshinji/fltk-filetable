@@ -42,6 +42,8 @@
 #include "fltk_filetable_.hpp"
 
 
+// TODO: use std::asynch?
+
 namespace fltk
 {
 
@@ -134,7 +136,7 @@ private:
   }
 #endif
 
-  Fl_SVG_Image *icon(Row_t r) const
+  Fl_SVG_Image *icon(Row_t r) const override
   {
     switch (r.type) {
       case 'D':
@@ -167,15 +169,13 @@ private:
     if (open_directory_.empty()) {
       p = magic_file(cookie_, r.cols[COL_NAME]);
     } else {
-      std::string file = open_directory_;
-      file.push_back('/');
-      file += r.cols[COL_NAME];
-      p = magic_file(cookie_, file.c_str());
+      std::string s;
+      s.reserve(open_directory_.size() + strlen(r.cols[COL_NAME]) + 1);
+      s = open_directory_ + "/" + r.cols[COL_NAME];
+      p = magic_file(cookie_, s.c_str());
     }
 
-    if (!p) {
-      return icn_[ICN_FILE].svg;
-    }
+    if (!p) return icn_[ICN_FILE].svg;
 
     const char *type = NULL;
 
@@ -186,18 +186,19 @@ private:
         if (STR_BEGINS(p, "application/")) {
           // check for "application/" and "application/x-" string
           const char *p2 = p + sizeof("application/") - 1;
-          std::string tmp;
+          std::string s;
+          s.reserve(strlen(p) + 2);
 
           if (STR_BEGINS(p2, "x-")) {
-            tmp = "application/";
-            tmp += p2 + 2;
+            s = "application/";
+            s += p2 + 2;
           } else {
-            tmp = "application/x-";
-            tmp += p2;
+            s = "application/x-";
+            s += p2;
           }
 
           for (const auto l : icn_custom_) {
-            if (strstr(l.list, p) || strstr(l.list, tmp.c_str())) {
+            if (strstr(l.list, p) || strstr(l.list, s.c_str())) {
               return l.svg;
             }
           }
@@ -255,11 +256,14 @@ private:
 #undef STR_BEGINS
 
     // full check on other types than "application/"
-    std::string desc = p;
-    desc.push_back(';');
+    std::string s;
+    s.reserve(strlen(p) + 2);
+    s.push_back(';');
+    s.append(p);
+    s.push_back(';');
 
     for (const auto l : icn_custom_) {
-      if (strstr(l.list, desc.c_str())) {
+      if (strstr(l.list, s.c_str())) {
         return l.svg;
       }
     }
@@ -336,7 +340,7 @@ public:
 #endif
   }
 
-  ~filetable_magic()
+  virtual ~filetable_magic()
   {
     if (th_) {
       th_->detach();
@@ -386,21 +390,20 @@ public:
       return false;
     }
 
-    auto lambda = [] (filetable_magic *o) { o->update_icons(); };
-    th_ = new std::thread(lambda, this);
+    th_ = new std::thread([this](){ this->update_icons(); });
 
     return true;
   }
 
-  bool load_dir() {
+  bool load_dir() override {
     return load_dir(".");
   }
 
-  bool refresh() {
+  bool refresh() override {
     return load_dir(NULL);
   }
 
-  bool dir_up()
+  bool dir_up() override
   {
     if (open_directory_.empty()) {
       return load_dir("..");
@@ -418,17 +421,15 @@ public:
   // same as the parent class double_click_callback() method, but we must
   // replace it to call the child class load_dir() method,
   // or else icons won't update after double-clicking on a directory
-  virtual void double_click_callback()
+  virtual void double_click_callback() override
   {
-    std::string s(last_clicked_item());
-
-    if (!rowdata_[last_row_clicked_].isdir()) {
-      selection_ = s;
-      window()->hide();
+    if (rowdata_.at(last_row_clicked_).isdir()) {
+      load_dir(last_clicked_item().c_str());
       return;
     }
 
-    load_dir(s.c_str());
+    selection_ = last_clicked_item();
+    window()->hide();
   }
 
   bool set_icon(const char *filename, const char *data, int idx)
@@ -522,13 +523,13 @@ public:
     ext.list = reinterpret_cast<char *>(realloc(buf, strlen(buf)));
     ext.svg = svg;
 
-    icn_custom_.push_back(ext);
+    icn_custom_.emplace_back(ext);
 
     return true;
   }
 
   // load a set of default icons
-  void load_default_icons()
+  void load_default_icons() override
   {
 #ifdef SVG_DATA_H
     // https://en.wikipedia.org/wiki/List_of_archive_formats
@@ -580,6 +581,16 @@ public:
     for (int i=0; i < ICN_LAST; ++i) {
       set_icon(NULL, default_icon_data(i), i);
     }
+
+    // clear custom icons
+    for (const auto e : icn_custom_) {
+      if (e.list) free(e.list);
+      if (e.svg) delete e.svg;
+    }
+
+    icn_custom_.clear();
+    icn_custom_.reserve(8);
+
     set_icon(NULL, FILE_TEXT_SVG_DATA, ";text;");
     set_icon(NULL, FILE_IMAGE_3_SVG_DATA, ";image;");
     set_icon(NULL, FILE_VIDEO_SVG_DATA, ";video;");

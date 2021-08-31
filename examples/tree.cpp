@@ -62,12 +62,9 @@ int main()
   tree.load_dir("/boot/grub/../grub/fonts/////");
   tree.load_dir(".");
   tree.load_dir("../fltk");
-  tree.load_dir("/root/xxxx");
+  tree.load_dir("/root");  // locked icon because of no access rights
 
   tree.item_labelsize(16);  // update all items
-
-  //Fl_SVG_Image lnk("../include/Overlay_link.svg");
-  //tree.usericon_link(&lnk);
 
   win.end();
   win.resizable(tree);

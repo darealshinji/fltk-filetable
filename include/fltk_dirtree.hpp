@@ -115,6 +115,7 @@ private:
   static void default_callback(Fl_Widget *w, void *)
   {
     dirtree *o = dynamic_cast<dirtree *>(w);
+    //if (!o) return;
 
     switch(o->callback_reason()) {
       /*
@@ -137,8 +138,39 @@ private:
   }
 
 protected:
+  inline bool empty(const char *val) {
+    return (!val || *val == 0) ? true : false;
+  }
+
+  // appends data from "filename" to "data"
+  static bool append_file(std::string &data, const char *filename, const size_t max)
+  {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) return false;
+
+    fseek(fp, 0, SEEK_END);
+    size_t fsize = ftell(fp);
+
+    if (fsize >= max) {
+      fclose(fp);
+      return false;
+    }
+    rewind(fp);
+
+    data.reserve(data.size() + fsize);
+    char c = fgetc(fp);
+
+    while (c != EOF) {
+      data.push_back(c);
+      c = fgetc(fp);
+    }
+
+    fclose(fp);
+    return true;
+  }
+
   // return the absolute path of an item, ignoring empty labels
-  std::string item_path(Fl_Tree_Item *ti)
+  std::string item_path(const Fl_Tree_Item *ti)
   {
     if (ti->is_root()) {
       return "/";
@@ -288,14 +320,6 @@ protected:
     return true;
   }
 
-  /* force to accept only SVG icons (for now?) */
-  Fl_Image *usericon() const { return Fl_Tree::usericon(); }
-  void usericon(Fl_Image *val) { Fl_Tree::usericon(val); }
-
-  bool empty(const char *val) {
-    return (!val || *val == 0) ? true : false;
-  }
-
 public:
   dirtree(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Tree(X, Y, W, H, L)
@@ -304,11 +328,12 @@ public:
     item_reselect_mode(FL_TREE_SELECTABLE_ALWAYS);
     connectorstyle(FL_TREE_CONNECTOR_SOLID);
     callback(default_callback, NULL);
+
     close(root(), 0);
     add(root(), NULL);  // dummy entry
   }
 
-  ~dirtree()
+  virtual ~dirtree()
   {
     for (int i=0; i < TYPE_NUM; ++i) {
       if (def_icon_[i]) delete def_icon_[i];
@@ -352,19 +377,19 @@ public:
   }
 
   // load a directory from a given path
-  bool load_dir(const char *path)
+  bool load_dir(const char *inPath)
   {
-    if (empty(path)) {
+    if (empty(inPath)) {
       return false;
     }
 
-    if (path[0] == '/' && path[1] == 0) {
+    if (inPath[0] == '/' && inPath[1] == 0) {
       return load_root();
     }
 
-    char *s = filetable_::simplify_directory_path(path);
-    if (!s) s = strdup(path);  // fallback
-    char *p = s;
+    std::string s = filetable_::simplify_directory_path(inPath);
+    if (s.empty()) s = inPath;
+    char *p = const_cast<char *>(s.data());
 
     load_root();
 
@@ -372,19 +397,12 @@ public:
     while (*++p) {
       if (*p != '/') continue;
       *p = 0;
-
-      if (open(s) == -1) {
-        free(s);
-        return false;
-      }
+      if (open(s.data()) == -1) return false;
       *p = '/';
     }
 
     // finally open the full path
-    int rv = open(s);
-    free(s);
-
-    return (rv == -1) ? false : true;
+    return (open(s.data()) != -1);
   }
 
   // same as load_dir("/")
@@ -409,8 +427,9 @@ public:
     }
   }
 
-  // set usericon by index/type
-  void usericon(Fl_SVG_Image *svg, int idx)
+  // set usericon by index/type;
+  // force any call to usericon() method to accept only Fl_SVG_Image* as argument
+  void usericon(Fl_SVG_Image *svg, int idx=TYPE_DEFAULT)
   {
     if (!svg || svg->fail()) return;
 
@@ -418,7 +437,7 @@ public:
       case TYPE_DEFAULT:
         icon_[idx] = svg;
         icon_[idx]->resize(item_labelsize(), item_labelsize());
-        usericon(icon_[idx]);  // set default usericon
+        Fl_Tree::usericon(icon_[idx]);  // set default usericon
         update_items();
         break;
       case TYPE_LINK:
@@ -452,6 +471,10 @@ public:
     return icon_[TYPE_DEFAULT];
   }
 
+  Fl_SVG_Image *usericon() const {
+    return icon_[TYPE_DEFAULT];
+  }
+
   // set the labelsize on items including root()
   // and adjust the icon size accordingly too
   void item_labelsize(Fl_Fontsize val)
@@ -465,7 +488,7 @@ public:
     }
 
     if (icon_[TYPE_DEFAULT]) {
-      usericon(icon_[TYPE_DEFAULT]);
+      Fl_Tree::usericon(icon_[TYPE_DEFAULT]);
     }
 
     update_items();
