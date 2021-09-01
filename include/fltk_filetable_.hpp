@@ -53,6 +53,8 @@
 #define FLTK_FMT_FLOAT "%.1Lf"
 #endif
 
+// TODO: set selection text color dynamically (CONTEXT_CELL)
+
 
 namespace fltk
 {

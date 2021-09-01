@@ -45,6 +45,12 @@
 #endif
 
 
+// TODO:
+// * focus remains on tree_
+// * random crashes on selection (multithreading issues? test with filetable_simple!)
+
+
+
 namespace fltk
 {
 
@@ -58,8 +64,7 @@ class fileselection : public Fl_Group
 private:
 
   // create a subclass with an overloaded double_click_callback() method
-  template <class T0>
-  class filetable_sub : public T0
+  class filetable_sub : public T
   {
   private:
     fileselection *fs_ptr;
@@ -69,14 +74,14 @@ private:
     }
 
   public:
-    filetable_sub(int X, int Y, int W, int H, fileselection *fs) : T0(X,Y,W,H,NULL) {
+    filetable_sub(int X, int Y, int W, int H, fileselection *fs) : T(X,Y,W,H,NULL) {
       fs_ptr = fs;
     }
   };
 
   std::string selection_;
   dirtree *tree_;
-  filetable_sub<T> *table_;
+  filetable_sub *table_;
 
   Fl_Group *g_top;
   Fl_Tile *g_main;
@@ -186,8 +191,10 @@ public:
 
       nx += tree_->w();
       nw = g_main->w() - nw;
-      table_ = new filetable_sub<T>(nx,ny,nw,nh, this);
+      table_ = new filetable_sub(nx,ny,nw,nh, this);
       table_->load_default_icons();
+
+      tree_->selection_color(table_->selection_color());
     }
     g_main->end();
 
