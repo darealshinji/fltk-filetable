@@ -73,7 +73,7 @@ private:
 
   Fl_Group *g_top;
   Fl_Tile *g_main;
-  Fl_Button *b_up;
+  Fl_Button *b_up, *b_reload;
   Fl_Box *g_top_dummy;
 
   virtual void double_click_callback()
@@ -88,6 +88,10 @@ private:
 
   static void up_callback(Fl_Widget *, void *v) {
     reinterpret_cast<fileselection *>(v)->dir_up();
+  }
+
+  static void reload_callback(Fl_Widget *, void *v) {
+    reinterpret_cast<fileselection *>(v)->refresh();
   }
 
   static void tree_callback(Fl_Widget *, void *v) {
@@ -114,21 +118,44 @@ private:
     }
   }
 
-  // helper method for load_dir() and dir_up()
+  // load currently open directory for tree_ and table_
   bool load_open_directory()
   {
+    bool rv = tree_->load_dir(table_->open_directory());
+
     if (table_->open_directory_is_root()) {
       b_up->deactivate();
     } else {
       b_up->activate();
+      // scroll down tree
+      if (rv) tree_->show_item(tree_->find_item(table_->open_directory()));
     }
 
-    bool rv = tree_->load_dir(table_->open_directory());
-
-    // scroll down tree
-    if (rv) tree_->show_item(tree_->find_item(table_->open_directory()));
-
     return rv;
+  }
+
+  // move up the tree until we can open a directory, otherwise open root
+  void move_up_tree()
+  {
+    std::string s = filetable_::simplify_directory_path(table_->open_directory());
+    char * const path = const_cast<char *>(s.data());
+    char *p = path + s.length();
+
+    while (p-- != path) {
+      if (*p == '/') {
+        *p = 0;
+        if (table_->load_dir(path)) break;
+      }
+    }
+
+    if (*path == 0) {
+      // moved all the way up to the root directory
+      tree_->close_root();
+      table_->load_dir("/");
+    } else {
+      // close path
+      tree_->close(path, 0);
+    }
   }
 
 public:
@@ -138,10 +165,13 @@ public:
     // top bar with buttons and such
     g_top = new Fl_Group(X, Y, W, 46);
     {
-      b_up = new Fl_Button(X, Y, 42, 42, "Up");
+      b_up = new Fl_Button(X, Y, 42, 42, "@+68->");
       b_up->callback(up_callback, this);
 
-      g_top_dummy = new Fl_Box(X + b_up->w(), Y, 1, 1);
+      b_reload = new Fl_Button(X + b_up->w() + 4, Y, 42, 42, "@+4reload");
+      b_reload->callback(reload_callback, this);
+
+      g_top_dummy = new Fl_Box(b_reload->x() + b_reload->w(), Y, 1, 1);
     }
     g_top->end();
     g_top->resizable(g_top_dummy);
@@ -170,27 +200,25 @@ public:
     resizable(g_main);
   }
 
-  virtual ~fileselection()
-  {
+  virtual ~fileselection() {
     delete tree_;
     delete table_;
   }
 
   // calls load_dir() on table_ and tree_
-  bool load_dir(const char *dirname)
-  {
-    if (!table_->load_dir(dirname)) {
-      return false;
-    }
+  bool load_dir(const char *dirname) {
+    if (!table_->load_dir(dirname)) return false;
     return load_open_directory();
   }
 
   // move directory up (table_ and tree_)
-  bool dir_up()
-  {
-    if (!table_->dir_up()) {
-      return false;
-    }
+  bool dir_up() {
+    if (!table_->dir_up()) move_up_tree();
+    return load_open_directory();
+  }
+
+  bool refresh() {
+    if (!table_->refresh()) move_up_tree();
     return load_open_directory();
   }
 

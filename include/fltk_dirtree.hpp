@@ -554,7 +554,14 @@ public:
 
   // same as load_dir("/")
   bool load_root() {
-    return Fl_Tree::open(root());
+    // Fl_Tree::open(root()) will "reset" the entire root tree!
+    return (open(root()) != -1);
+  }
+
+  // close the tree
+  void close_root() {
+    close(root(), 0);
+    add(root(), NULL);  // dummy entry
   }
 
   // load a set of default icons
