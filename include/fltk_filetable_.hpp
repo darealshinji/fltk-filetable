@@ -214,13 +214,8 @@ private:
     return labelsize() + 10;
   }
 
-  // Callback whenever someone clicks on different parts of the table
-  static void event_callback(Fl_Widget *o, void *) {
-    dynamic_cast<filetable_ *>(o)->event_callback2();
-  }
-
   // callback for table events
-  void event_callback2()
+  void event_callback()
   {
     //int row = callback_row();  // unused
     int col = callback_col();
@@ -752,9 +747,11 @@ public:
     autowidth_max(W - col_name_extra_w());
 
     when(FL_WHEN_RELEASE);
+    callback(static_cast<void(*)(Fl_Widget *)>(
+      [](Fl_Widget *o) { reinterpret_cast<filetable_ *>(o)->event_callback(); }
+    ));
 
     end();
-    callback(event_callback, NULL);
   }
 
   // d'tor

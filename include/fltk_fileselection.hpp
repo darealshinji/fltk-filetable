@@ -37,6 +37,13 @@
 #include "fltk_filetable_extension.hpp"
 #include "fltk_filetable_magic.hpp"
 
+#ifndef FILESELECTION_CALLBACK
+#define FILESELECTION_CALLBACK(FUNC) \
+  static_cast<void(*)(Fl_Widget*, void*)>(\
+    [](Fl_Widget*, void *v) { reinterpret_cast<fileselection *>(v)->FUNC(); }\
+  )
+#endif
+
 
 namespace fltk
 {
@@ -86,19 +93,7 @@ private:
     }
   }
 
-  static void up_callback(Fl_Widget *, void *v) {
-    reinterpret_cast<fileselection *>(v)->dir_up();
-  }
-
-  static void reload_callback(Fl_Widget *, void *v) {
-    reinterpret_cast<fileselection *>(v)->refresh();
-  }
-
-  static void tree_callback(Fl_Widget *, void *v) {
-    reinterpret_cast<fileselection *>(v)->tree_callback2();
-  }
-
-  void tree_callback2()
+  void tree_callback()
   {
     switch(tree_->callback_reason()) {
       case FL_TREE_REASON_RESELECTED:
@@ -166,10 +161,10 @@ public:
     g_top = new Fl_Group(X, Y, W, 46);
     {
       b_up = new Fl_Button(X, Y, 42, 42, "@+68->");
-      b_up->callback(up_callback, this);
+      b_up->callback(FILESELECTION_CALLBACK(dir_up), this);
 
       b_reload = new Fl_Button(X + b_up->w() + 4, Y, 42, 42, "@+4reload");
-      b_reload->callback(reload_callback, this);
+      b_reload->callback(FILESELECTION_CALLBACK(refresh), this);
 
       g_top_dummy = new Fl_Box(b_reload->x() + b_reload->w(), Y, 1, 1);
     }
@@ -186,7 +181,7 @@ public:
     {
       nw *= 0.25;
       tree_ = new dirtree(nx,ny,nw,nh);
-      tree_->callback(tree_callback, this);
+      tree_->callback(FILESELECTION_CALLBACK(tree_callback), this);
       tree_->load_default_icons();
 
       nx += tree_->w();
