@@ -100,16 +100,11 @@ public:
     }
   }
 
-  bool set_icon(const char *filename, const char *data, int idx)
+  bool set_icon(const char *filename, const char *data, EIcn idx)
   {
-    if ((empty(filename) && empty(data)) || idx < 0 || idx > ICN_LOCK) {
-      return false;
-    }
+    if (empty(filename) && empty(data)) return false;
 
-    if (icn_[idx]) {
-      delete icn_[idx];
-    }
-
+    if (icn_[idx]) delete icn_[idx];
     icn_[idx] = new Fl_SVG_Image(filename, data);
 
     if (icn_[idx]->fail()) {

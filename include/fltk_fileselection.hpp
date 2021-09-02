@@ -47,7 +47,7 @@
 
 // TODO:
 // * focus remains on tree_
-// * random crashes on selection (multithreading issues? test with filetable_simple!)
+// * random crashes on selection when using fltk::filetable_magic
 
 
 

@@ -432,11 +432,9 @@ public:
     window()->hide();
   }
 
-  bool set_icon(const char *filename, const char *data, int idx)
+  bool set_icon(const char *filename, const char *data, EIcn idx)
   {
-    if ((empty(data) && empty(filename)) || idx < 0 || idx >= ICN_LAST) {
-      return false;
-    }
+    if (empty(data) && empty(filename)) return false;
 
     if (icn_[idx].svg && icn_[idx].alloc) {
       delete icn_[idx].svg;
@@ -578,8 +576,9 @@ public:
       "application/x-zoo;"
       "application/x-par2;";
 
-    for (int i=0; i < ICN_LAST; ++i) {
-      set_icon(NULL, default_icon_data(i), i);
+    for (int i=0; i < static_cast<int>(ICN_LAST); ++i) {
+      EIcn e = static_cast<EIcn>(i);
+      set_icon(NULL, default_icon_data(e), e);
     }
 
     // clear custom icons

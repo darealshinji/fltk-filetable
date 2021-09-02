@@ -32,7 +32,7 @@ int main()
 {
   Fl_Double_Window win(800, 600, "Test");
 
-  fltk::fileselection<fltk::filetable_magic> sel(10, 10, win.w()-20, win.h()-20);
+  fltk::fileselection<fltk::filetable_simple> sel(10, 10, win.w()-20, win.h()-20);
   sel.load_dir(".");
 
   win.end();

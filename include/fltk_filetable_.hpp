@@ -53,7 +53,8 @@
 #define FLTK_FMT_FLOAT "%.1Lf"
 #endif
 
-// TODO: set selection text color dynamically (CONTEXT_CELL)
+// TODO:
+// * set selection text color dynamically (CONTEXT_CELL)
 
 
 namespace fltk
@@ -63,34 +64,34 @@ class filetable_ : public Fl_Table_Row
 {
 public:
   // columns
-  enum {
-    COL_NAME = 0,      // Name
-    COL_SIZE = 1,      // Size
-    COL_LAST_MOD = 2,  // Last modified
-    COL_MAX = 3
+  enum ECol {
+    COL_NAME = 0,  // Name
+    COL_SIZE,      // Size
+    COL_LAST_MOD,  // Last modified
+    COL_MAX
   };
 
   // size column strings
-  enum {
+  enum EStrSize {
     STR_SIZE_ELEMENTS = 0,  // n elements
-    STR_SIZE_BYTES = 1,     // n bytes
-    STR_SIZE_KBYTES = 2,    // n kiB
-    STR_SIZE_MBYTES = 3,    // n MiB
-    STR_SIZE_GBYTES = 4,    // n GiB
-    STR_SIZE_TBYTES = 5,    // n TiB
-    STR_SIZE_MAX = 6
+    STR_SIZE_BYTES,         // n bytes
+    STR_SIZE_KBYTES,        // n kiB
+    STR_SIZE_MBYTES,        // n MiB
+    STR_SIZE_GBYTES,        // n GiB
+    STR_SIZE_TBYTES,        // n TiB
+    STR_SIZE_MAX
   };
 
 protected:
-  enum {
-    ICN_DIR,   // directory
-    ICN_FILE,  // regular file
-    ICN_LINK,  // symbolic link (overlay)
-    ICN_LOCK,  // "no access" overlay icon
-    ICN_BLK,   // block device
-    ICN_CHR,   // character device
-    ICN_PIPE,  // FIFO/pipe
-    ICN_SOCK,  // socket
+  enum EIcn {
+    ICN_DIR = 0,  // directory
+    ICN_FILE,     // regular file
+    ICN_LINK,     // symbolic link (overlay)
+    ICN_LOCK,     // "no access" overlay icon
+    ICN_BLK,      // block device
+    ICN_CHR,      // character device
+    ICN_PIPE,     // FIFO/pipe
+    ICN_SOCK,     // socket
     ICN_LAST
   };
 
@@ -184,11 +185,16 @@ private:
 
   // icons used for a filename "blend-over" effect;
   // 2 colors for selected and unselected row
-  Fl_SVG_Image *icon_blend_[2];
+  Fl_RGB_Image *icon_blend_[2] = {0};
 
-  // size of the filename "blend-over" area in pixels;
+  // width of the filename blend-over area in pixels;
   // 0 will disable this effect
   int blend_w_ = 8;
+
+  // height of blend-over area; keep this initially at 0
+  // so we won't call make_overlay_image() before we even
+  // drew any table rows
+  int blend_h_ = 0;
 
   // labels of the header entries
   const char *label_header_[COL_MAX] = {
@@ -260,6 +266,44 @@ protected:
     return (!val || *val == 0) ? true : false;
   }
 
+  // create an overlay image, transitioning from the left being full
+  // transparent to the right being full opaque
+  Fl_RGB_Image *make_overlay_image(uchar r, uchar g, uchar b, int W, int H)
+  {
+    if (W < 1 || H < 1) return NULL;
+
+    uchar line[W*4];
+    uchar *data = new uchar[W*H*4];
+    const double div = static_cast<double>(sizeof(line)) / 255.0;
+
+    // create a 1 pixel height line
+    for (size_t i=0; i < sizeof(line); i+=4) {
+      line[i] = r;
+      line[i+1] = g;
+      line[i+2] = b;
+      line[i+3] = static_cast<uchar>(i/div);
+    }
+
+    // copy the line multiple times
+    for (int i=0; i < H; ++i) {
+      memcpy(data + i*sizeof(line), line, sizeof(line));
+    }
+
+    Fl_RGB_Image *rgba = new Fl_RGB_Image(data, W, H, 4);
+    rgba->alloc_array = 1;
+
+    return rgba;
+  }
+
+  // wrapper taking an Fl_Color argument
+  Fl_RGB_Image *make_overlay_image(Fl_Color c, int W, int H)
+  {
+    if (W < 1 || H < 1) return NULL;
+    uchar r=0, g=0, b=0;
+    Fl::get_color(c, r, g, b);
+    return make_overlay_image(r, g, b, W, H);
+  }
+
   // format localization string using "{}" as replacement for a variable:
   // replace first occurance of "{}" in "str" with "format";
   // i.e. str="{} bytes" and format="%ld" returns "%ld bytes "
@@ -288,7 +332,7 @@ protected:
   }
 
   // return a generic SVG icon by idx/enum
-  static const char *default_icon_data(int idx)
+  static const char *default_icon_data(EIcn idx)
   {
 #ifdef SVG_DATA_H
     switch (idx) {
@@ -356,13 +400,13 @@ protected:
           Fl_Color bgcol = FL_WHITE;
           Fl_Color textcol = FL_BLACK;
           Fl_Align al = (C == COL_SIZE) ? FL_ALIGN_RIGHT : FL_ALIGN_LEFT;
-          Fl_SVG_Image *svg = icon_blend_[0];
+          Fl_RGB_Image *blend = icon_blend_[0];
           int fw = 0;
 
           if (row_selected(R)) {
-            svg = icon_blend_[1];
+            blend = icon_blend_[1];
             bgcol = selection_color();
-            textcol = FL_WHITE;
+            textcol = FL_WHITE;  // make this dynamic
           }
 
           if (C != COL_LAST_MOD) {
@@ -405,12 +449,12 @@ protected:
           fl_draw(rowdata_.at(R).cols[C], X, Y + 2, W, H - 2, al, NULL, 0);
 
           // blend over long text at the end of name column
-          if (C == COL_NAME && svg && fw > W && blend_w() > 0) {
-            if (svg->w() != blend_w() || svg->h() != H) {
-              svg->resize(blend_w(), H);
-              col_resize_min(col_name_extra_w() + svg->w());
+          if (C == COL_NAME && blend_w() > 0) {
+            if (blend_h() != H) blend_h(H);
+
+            if (blend && fw + blend_h() > W) {
+              blend->draw(X + W - col_name_extra_w() - blend_w(), Y);
             }
-            svg->draw(X + W - (col_name_extra_w() + svg->w()), Y);
           }
         }
         fl_pop_clip();
@@ -536,7 +580,7 @@ protected:
     const long s_GiB = 1024 * s_MiB;
     const long s_TiB = 1024 * s_GiB;
     long double ld = bytes;
-    int idx = STR_SIZE_BYTES;
+    EStrSize idx = STR_SIZE_BYTES;
 
     switch (bytes) {
       // GiB
@@ -699,53 +743,14 @@ public:
   filetable_(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Table_Row(X, Y, W, H, L)
   {
-    color(FL_WHITE, fl_rgb_color(0x41, 0x69, 0xE1));
+    color(FL_WHITE);
 
-    // icon_blend_[0]
-    const char *svg_data1 = \
-      "<svg width='16' height='16'>" \
-       "<defs>" \
-        "<linearGradient id='a' x1='16' x2='0' y1='8' y2='8'>" \
-         "<stop stop-color='#fff' offset='0'/>" \
-         "<stop stop-color='#fff' stop-opacity='0' offset='1'/>" \
-        "</linearGradient>" \
-       "</defs>" \
-       "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
-      "</svg>";
-
-    icon_blend_[0] = new Fl_SVG_Image(NULL, svg_data1);
-
-    if (icon_blend_[0]->fail()) {
-      delete icon_blend_[0];
-      icon_blend_[0] = NULL;
-    } else {
-      icon_blend_[0]->proportional = false;
-    }
-
-    // icon_blend_[1]
-    const char *svg_data2 = \
-      "<svg width='16' height='16'>" \
-       "<defs>" \
-        "<linearGradient id='a' x1='16' x2='0' y1='8' y2='8'>" \
-         "<stop stop-color='#4169E1' offset='0'/>" \
-         "<stop stop-color='#4169E1' stop-opacity='0' offset='1'/>" \
-        "</linearGradient>" \
-       "</defs>" \
-       "<rect x='0' y='0' width='16' height='16' fill='url(#a)'/>" \
-      "</svg>";
-
-    icon_blend_[1] = new Fl_SVG_Image(NULL, svg_data2);
-
-    if (icon_blend_[1]->fail()) {
-      delete icon_blend_[1];
-      icon_blend_[1] = NULL;
-    } else {
-      icon_blend_[1]->proportional = false;
-    }
+    // need to set this explicitly, otherwise selection color is gray???
+    selection_color(FL_SELECTION_COLOR);
 
     col_header(1);
     col_resize(1);
-    col_resize_min(col_name_extra_w() + labelsize());
+    col_resize_min(col_name_extra_w() + blend_w());
     autowidth_max(W - col_name_extra_w());
 
     when(FL_WHEN_RELEASE);
@@ -1093,7 +1098,6 @@ public:
 
     std::string s;
     s.reserve(open_directory_.size() + strlen(name) + 1);
-
     s = open_directory_;
     if (s.back() != '/') s.push_back('/');
     s.append(rowdata_.at(last_row_clicked_).cols[COL_NAME]);
@@ -1116,19 +1120,10 @@ public:
   virtual void load_default_icons() = 0;
 
   // set
+  void label_header(EIcn idx, const char *l) { label_header_[idx] = l; }
 
-  void label_header(int idx, const char *l) {
-    if (idx >= 0 && idx < COL_MAX) {
-      label_header_[idx] = l;
-    }
-  }
-
-  void filesize_label(int idx, const char *l)
+  void filesize_label(EIcn idx, const char *l)
   {
-    if (idx < 0 || idx >= STR_SIZE_MAX) {
-      return;
-    }
-
     switch (idx) {
       case STR_SIZE_ELEMENTS:
         str_unknown_elements_ = format_localization(l, "??");
@@ -1141,24 +1136,67 @@ public:
     }
   }
 
+  void update_overlays()
+  {
+    if (icon_blend_[0]) delete icon_blend_[0];
+    if (icon_blend_[1]) delete icon_blend_[1];
+    icon_blend_[0] = make_overlay_image(color(), blend_w(), blend_h());
+    icon_blend_[1] = make_overlay_image(selection_color(), blend_w(), blend_h());
+  }
+
+  void labelsize(int i)
+  {
+    if (i == Fl_Table_Row::labelsize()) return;
+    Fl_Table_Row::labelsize(i);
+    update_overlays();
+  }
+
+  void blend_w(int i)
+  {
+    if (i == blend_w_) return;
+    blend_w_ = i;
+    col_resize_min(col_name_extra_w() + blend_w());
+    update_overlays();
+  }
+
+  void blend_h(int i)
+  {
+    if (i == blend_h_) return;
+    blend_h_ = i;
+    update_overlays();
+  }
+
+  void color(Fl_Color c)
+  {
+    if (c == Fl_Table_Row::color()) return;
+    Fl_Table_Row::color(c);
+    update_overlays();
+  }
+
+  void selection_color(Fl_Color c) {
+    if (c == Fl_Table_Row::selection_color()) return;
+    Fl_Table_Row::selection_color(c);
+    update_overlays();
+  }
+
   void autowidth_padding(int i) { autowidth_padding_ = (i < 0) ? 0 : i; }
   void autowidth_max(int i) { autowidth_max_ = i; }
-  void blend_w(int i) { blend_w_ = i; }
   void show_hidden(bool b) { show_hidden_ = b; }
 
   // get
+  const char *label_header(EIcn idx) const { return label_header_[idx]; }
 
-  const char *label_header(int idx) const {
-    return (idx >= 0 && idx < COL_MAX) ? label_header_[idx] : NULL;
+  const char *filesize_label(EIcn idx) const {
+    return filesize_label_[idx].empty() ? NULL : filesize_label_[idx].c_str();
   }
 
-  const char *filesize_label(int idx) const {
-    return (idx >= 0 && idx < STR_SIZE_MAX && !filesize_label_[idx].empty()) ? filesize_label_[idx].c_str() : NULL;
-  }
-
+  int labelsize() const { return Fl_Table_Row::labelsize(); }
+  int blend_w() const { return blend_w_; }
+  int blend_h() const { return blend_h_; }
+  Fl_Color color() const { return Fl_Table_Row::color(); }
+  Fl_Color selection_color() const { return Fl_Table_Row::selection_color(); }
   int autowidth_padding() const { return autowidth_padding_; }
   int autowidth_max() const { return autowidth_max_; }
-  int blend_w() const { return blend_w_; }
   bool show_hidden() const { return show_hidden_; }
 };
 
