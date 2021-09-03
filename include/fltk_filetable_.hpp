@@ -281,7 +281,7 @@ protected:
       line[i] = r;
       line[i+1] = g;
       line[i+2] = b;
-      line[i+3] = static_cast<uchar>(i/div);
+      line[i+3] = static_cast<uchar>(static_cast<double>(i)/div);
     }
 
     // copy the line multiple times
