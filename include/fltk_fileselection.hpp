@@ -187,12 +187,10 @@ public:
       nw *= 0.25;
       tree_ = new dirtree(nx,ny,nw,nh);
       tree_->callback(FILESELECTION_CALLBACK(tree_callback), this);
-      tree_->load_default_icons();
 
       nx += tree_->w();
       nw = g_main->w() - nw;
       table_ = new filetable_sub(nx,ny,nw,nh, this);
-      table_->load_default_icons();
 
       tree_->selection_color(table_->selection_color());
     }
@@ -228,6 +226,41 @@ public:
   const char *selection() {
     return selection_.empty() ? NULL : selection_.c_str();
   }
+
+  void add_filter(const char *str) {table_->add_filter(str);}
+  void add_filter_list(const char *list, const char *delim) {table_->add_filter_list(list, delim);}
+
+  void load_default_icons() {tree_->load_default_icons(); table_->load_default_icons();}
+
+  void labelsize(int i) {tree_->labelsize(i); table_->labelsize(i);}
+  int labelsize() const {return table_->labelsize();}
+
+  void color(Fl_Color c) {tree_->color(c); table_->color(c);}
+  Fl_Color color() const {return table_->color();}
+
+  void selection_color(Fl_Color c) {tree_->selection_color(c); table_->selection_color(c);}
+  Fl_Color selection_color() const {return table_->selection_color();}
+
+  void show_hidden(bool b) {tree_->show_hidden(b); table_->show_hidden(b);}
+  bool show_hidden() const {return table_->show_hidden();}
+
+  void double_click_timeout(double d) {table_->double_click_timeout(d);}
+  double double_click_timeout() const {return table_->double_click_timeout();}
+
+  void blend_w(int i) {table_->blend_w(i);}
+  int blend_w() const {return table_->blend_w();}
+
+  void autowidth_padding(int i) {table_->autowidth_padding(i);}
+  int autowidth_padding() const {return table_->autowidth_padding();}
+
+  void autowidth_max(int i) {table_->autowidth_max(i);}
+  int autowidth_max() const {return table_->autowidth_max();}
+
+  void label_header(filetable_::ECol idx, const char *l) {table_->label_header(idx, l);}
+  const char *label_header(filetable_::ECol idx) const {return table_->label_header(idx);}
+
+  void filesize_label(filetable_::EStrSize idx, const char *l) {table_->filesize_label(idx, l);}
+  const char *filesize_label(filetable_::EStrSize idx) const {return table_->filesize_label(idx);}
 };
 
 } // namespace fltk

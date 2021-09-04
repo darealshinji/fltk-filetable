@@ -53,9 +53,6 @@
 #define FLTK_FMT_FLOAT "%.1Lf"
 #endif
 
-// TODO:
-// * set selection text color dynamically (CONTEXT_CELL)
-
 
 namespace fltk
 {
@@ -253,6 +250,14 @@ private:
     within_double_click_timelimit_ = false;
   }
 
+  void blend_h(int i) {
+    if (i == blend_h_) return;
+    blend_h_ = i;
+    update_overlays();
+  }
+
+  int blend_h() const { return blend_h_; }
+
 protected:
   std::string open_directory_;
   std::string selection_;
@@ -302,6 +307,14 @@ protected:
     uchar r=0, g=0, b=0;
     Fl::get_color(c, r, g, b);
     return make_overlay_image(r, g, b, W, H);
+  }
+
+  void update_overlays()
+  {
+    if (icon_blend_[0]) delete icon_blend_[0];
+    if (icon_blend_[1]) delete icon_blend_[1];
+    icon_blend_[0] = make_overlay_image(color(), blend_w(), blend_h());
+    icon_blend_[1] = make_overlay_image(selection_color(), blend_w(), blend_h());
   }
 
   // format localization string using "{}" as replacement for a variable:
@@ -397,8 +410,7 @@ protected:
 
       case CONTEXT_CELL:
         fl_push_clip(X, Y, W, H); {
-          Fl_Color bgcol = FL_WHITE;
-          Fl_Color textcol = FL_BLACK;
+          Fl_Color bgcol = color();
           Fl_Align al = (C == COL_SIZE) ? FL_ALIGN_RIGHT : FL_ALIGN_LEFT;
           Fl_RGB_Image *blend = icon_blend_[0];
           int fw = 0;
@@ -406,7 +418,6 @@ protected:
           if (row_selected(R)) {
             blend = icon_blend_[1];
             bgcol = selection_color();
-            textcol = FL_WHITE;  // make this dynamic
           }
 
           if (C != COL_LAST_MOD) {
@@ -445,7 +456,7 @@ protected:
 
           // Text
           fl_font(labelfont(), labelsize());
-          fl_color(textcol);
+          fl_color(fl_contrast(labelcolor(), bgcol));
           fl_draw(rowdata_.at(R).cols[C], X, Y + 2, W, H - 2, al, NULL, 0);
 
           // blend over long text at the end of name column
@@ -709,17 +720,17 @@ protected:
       // header
       w = h = 0;
       fl_measure(label_header_[c], w, h, 0);
-      col_width(c, w + autowidth_padding_);
+      col_width(c, w + autowidth_padding());
 
       // rows
       for (size_t r = 0; r < rowdata_.size(); ++r) {
         w = h = 0;
         fl_measure(rowdata_.at(r).cols[c], w, h, 0);
-        w += autowidth_padding_ + extra;
+        w += autowidth_padding() + extra;
 
-        if (autowidth_max_ > col_resize_min() && w >= autowidth_max_) {
+        if (autowidth_max() > col_resize_min() && w >= autowidth_max()) {
           // set to maximum autowidth and exit for-loop
-          col_width(c, autowidth_max_);
+          col_width(c, autowidth_max());
           break;
         }
 
@@ -744,8 +755,6 @@ public:
   : Fl_Table_Row(X, Y, W, H, L)
   {
     color(FL_WHITE);
-
-    // need to set this explicitly, otherwise selection color is gray???
     selection_color(FL_SELECTION_COLOR);
 
     col_header(1);
@@ -1059,6 +1068,8 @@ public:
     }
   }
 
+  double double_click_timeout() const { return dc_timeout_; }
+
   // add file extension to filter
   void add_filter(const char *str)
   {
@@ -1120,9 +1131,9 @@ public:
   virtual void load_default_icons() = 0;
 
   // set
-  void label_header(EIcn idx, const char *l) { label_header_[idx] = l; }
+  void label_header(ECol idx, const char *l) { label_header_[idx] = l; }
 
-  void filesize_label(EIcn idx, const char *l)
+  void filesize_label(EStrSize idx, const char *l)
   {
     switch (idx) {
       case STR_SIZE_ELEMENTS:
@@ -1136,21 +1147,6 @@ public:
     }
   }
 
-  void update_overlays()
-  {
-    if (icon_blend_[0]) delete icon_blend_[0];
-    if (icon_blend_[1]) delete icon_blend_[1];
-    icon_blend_[0] = make_overlay_image(color(), blend_w(), blend_h());
-    icon_blend_[1] = make_overlay_image(selection_color(), blend_w(), blend_h());
-  }
-
-  void labelsize(int i)
-  {
-    if (i == Fl_Table_Row::labelsize()) return;
-    Fl_Table_Row::labelsize(i);
-    update_overlays();
-  }
-
   void blend_w(int i)
   {
     if (i == blend_w_) return;
@@ -1159,42 +1155,18 @@ public:
     update_overlays();
   }
 
-  void blend_h(int i)
-  {
-    if (i == blend_h_) return;
-    blend_h_ = i;
-    update_overlays();
-  }
-
-  void color(Fl_Color c)
-  {
-    if (c == Fl_Table_Row::color()) return;
-    Fl_Table_Row::color(c);
-    update_overlays();
-  }
-
-  void selection_color(Fl_Color c) {
-    if (c == Fl_Table_Row::selection_color()) return;
-    Fl_Table_Row::selection_color(c);
-    update_overlays();
-  }
-
   void autowidth_padding(int i) { autowidth_padding_ = (i < 0) ? 0 : i; }
   void autowidth_max(int i) { autowidth_max_ = i; }
   void show_hidden(bool b) { show_hidden_ = b; }
 
   // get
-  const char *label_header(EIcn idx) const { return label_header_[idx]; }
+  const char *label_header(ECol idx) const { return label_header_[idx]; }
 
-  const char *filesize_label(EIcn idx) const {
+  const char *filesize_label(EStrSize idx) const {
     return filesize_label_[idx].empty() ? NULL : filesize_label_[idx].c_str();
   }
 
-  int labelsize() const { return Fl_Table_Row::labelsize(); }
   int blend_w() const { return blend_w_; }
-  int blend_h() const { return blend_h_; }
-  Fl_Color color() const { return Fl_Table_Row::color(); }
-  Fl_Color selection_color() const { return Fl_Table_Row::selection_color(); }
   int autowidth_padding() const { return autowidth_padding_; }
   int autowidth_max() const { return autowidth_max_; }
   bool show_hidden() const { return show_hidden_; }
