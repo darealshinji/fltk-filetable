@@ -24,24 +24,29 @@
 
 #include <algorithm>
 #include <vector>
-
 #include "xdg_dirs.hpp"
-
-
-static xdg paths;
 
 
 int main()
 {
   std::vector<int> vec;
 
-  if (!paths.get()) {
+  xdg paths;
+  int rv = paths.get(true, true);
+
+  if (rv == -1) {
     printf("error\n");
     return 1;
   }
 
+  printf("Found: %d/%d\n", rv, xdg::LAST);
   printf("Home: %s\n", paths.home());
-  printf("%s: %s\n\n", paths.basename(xdg::DESKTOP), paths.dir(xdg::DESKTOP));
+
+  if (rv == 0) return 1;
+
+  if (paths.dir(xdg::DESKTOP)) {
+    printf("[%s] %s: %s\n", paths.varname(xdg::DESKTOP), paths.basename(xdg::DESKTOP), paths.dir(xdg::DESKTOP));
+  }
 
   for (int i = 0; i < xdg::LAST; ++i) {
     if (i != xdg::DESKTOP && paths.dir(i)) {
@@ -49,20 +54,13 @@ int main()
     }
   }
 
-  if (vec.size() == 0) {
-    return 1;
-  }
+  if (vec.size() == 0) return 1;
 
-  std::stable_sort(vec.begin(), vec.end(),
-    [] (int a, int b) {
-      return strcasecmp(paths.basename(a), paths.basename(b)) < 0;
-    }
-  );
+  auto lambda = [paths](int a, int b) { return strcasecmp(paths.basename(a), paths.basename(b)) < 0; };
+  std::stable_sort(vec.begin(), vec.end(), lambda);
 
-  for (auto e : vec) {
-    if (strcmp(paths.home(), paths.dir(e)) != 0 && strncmp(paths.home(), paths.dir(e), paths.home_length()) == 0) {
-      printf("%s: %s\n", paths.basename(e), paths.dir(e));
-    }
+  for (const int i : vec) {
+    printf("[%s] %s: %s\n", paths.varname(i), paths.basename(i), paths.dir(i));
   }
 
   return 0;

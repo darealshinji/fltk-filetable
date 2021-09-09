@@ -29,18 +29,22 @@
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Group.H>
+#include <FL/Fl_Menu_Button.H>
+#include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Tile.H>
 #include <string>
+#include <vector>
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
 #include "fltk_filetable_extension.hpp"
 #include "fltk_filetable_magic.hpp"
+#include "xdg_dirs.hpp"
 
-#ifndef FILESELECTION_CALLBACK
-#define FILESELECTION_CALLBACK(FUNC) \
+#ifndef FS_CALLBACK
+#define FS_CALLBACK(FUNC) \
   static_cast<void(*)(Fl_Widget*, void*)>(\
-    [](Fl_Widget*, void *v) { reinterpret_cast<fileselection *>(v)->FUNC(); }\
+    [](Fl_Widget*, void *v) { reinterpret_cast<fileselection *>(v)->FUNC; }\
   )
 #endif
 
@@ -83,10 +87,20 @@ private:
   dirtree *tree_;
   filetable_sub *table_;
 
+  typedef struct {
+    fileselection *obj;
+    std::string str;
+  } cb_data;
+
+  cb_data data_[xdg::LAST + 1]; // XDG dirs + $HOME
+
   Fl_Group *g_top;
   Fl_Tile *g_main;
+  Fl_Menu_Button *b_places;
   Fl_Button *b_up, *b_reload;
   Fl_Box *g_top_dummy;
+
+protected:
 
   virtual void double_click_callback()
   {
@@ -122,9 +136,12 @@ private:
   bool load_open_directory()
   {
     bool rv = tree_->load_dir(table_->open_directory());
+    if (rv) tree_->calc_tree();
 
     if (table_->open_directory_is_root()) {
       b_up->deactivate();
+      tree_->hposition(0);
+      tree_->vposition(0);
     } else {
       b_up->activate();
       // scroll down tree
@@ -158,48 +175,94 @@ private:
     }
   }
 
+  static void places_cb(Fl_Widget *, void *v) {
+    cb_data *dat = reinterpret_cast<cb_data *>(v);
+    dat->obj->load_dir(dat->str.c_str());
+  }
+
 public:
+
+  // c'tor
   fileselection(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Group(X,Y,W,H,L)
   {
     // top bar with buttons and such
     g_top = new Fl_Group(X, Y, W, 46);
     {
-      b_up = new Fl_Button(X, Y, 42, 42, "@+68->");
-      b_up->callback(FILESELECTION_CALLBACK(dir_up), this);
+      b_places = new Fl_Menu_Button(g_top->x(), g_top->y(), 72, g_top->h() - 6, "Places");
+      b_places->add("\\/", 0, FS_CALLBACK(load_dir("/")), this);
 
-      b_reload = new Fl_Button(X + b_up->w() + 4, Y, 42, 42, "@+4reload");
-      b_reload->callback(FILESELECTION_CALLBACK(refresh), this);
+      b_up = new Fl_Button(b_places->x() + b_places->w() + 4, g_top->y(), b_places->h(), b_places->h(), "@+78->");
+      b_up->callback(FS_CALLBACK(dir_up()), this);
 
-      g_top_dummy = new Fl_Box(b_reload->x() + b_reload->w(), Y, 1, 1);
+      b_reload = new Fl_Button(b_up->x() + b_up->w() + 4, g_top->y(), b_up->h(), b_up->h(), "@+4reload");
+      b_reload->callback(FS_CALLBACK(refresh()), this);
+
+      g_top_dummy = new Fl_Box(b_reload->x() + b_reload->w(), g_top->y(), 1, 1);
     }
     g_top->end();
     g_top->resizable(g_top_dummy);
 
-    int nx = X;
-    int ny = Y + g_top->h();
-    int nw = W;
-    int nh = H - g_top->h();
-
     // main part with tree and filetable
-    g_main = new Fl_Tile(nx,ny,nw,nh);
+    g_main = new Fl_Tile(X, Y + g_top->h(), W, H - g_top->h());
     {
-      nw *= 0.25;
-      tree_ = new dirtree(nx,ny,nw,nh);
-      tree_->callback(FILESELECTION_CALLBACK(tree_callback), this);
+      tree_ = new dirtree(g_main->x(), g_main->y(), g_main->w()/4, g_main->h());
+      tree_->callback(FS_CALLBACK(tree_callback()), this);
 
-      nx += tree_->w();
-      nw = g_main->w() - nw;
-      table_ = new filetable_sub(nx,ny,nw,nh, this);
+      table_ = new filetable_sub(tree_->x() + tree_->w(), g_main->y(), g_main->w() - tree_->w(), g_main->h(), this);
 
       tree_->selection_color(table_->selection_color());
     }
     g_main->end();
 
+    // create "places" menu entries
+    xdg xdg;
+    int rv = xdg.get(true, true);
+
+    // $HOME
+    if (rv != -1) {
+      data_[0] = { this, xdg.home() };
+      b_places->add("Home", 0, places_cb, static_cast<void *>(&data_[0]));
+    }
+
+    if (rv > 0) {
+      // XDG_DESKTOP_DIR
+      if (xdg.dir(xdg::DESKTOP) && xdg.basename(xdg::DESKTOP)) {
+        data_[1] = { this, xdg.dir(xdg::DESKTOP) };
+        b_places->add(xdg.basename(xdg::DESKTOP), 0, places_cb, static_cast<void *>(&data_[1]));
+      }
+
+      // add remaining XDG directories
+      std::vector<int> xdg_vec_;
+      xdg_vec_.reserve(xdg::LAST - 1);
+
+      for (int i = 1; i < xdg::LAST; ++i) {
+        if (xdg.dir(i) && xdg.basename(i)) {
+          xdg_vec_.push_back(i);
+        }
+      }
+
+      if (xdg_vec_.size() > 0) {
+        auto lambda = [xdg](const int a, const int b) {
+          return strcasecmp(xdg.basename(a), xdg.basename(b)) < 0;
+        };
+        std::sort(xdg_vec_.begin(), xdg_vec_.end(), lambda);
+
+        int i = 2;
+
+        for (const int j : xdg_vec_) {
+          data_[i] = { this, xdg.dir(j) };
+          b_places->add(xdg.basename(j), 0, places_cb, static_cast<void *>(&data_[i]));
+          i++;
+        }
+      }
+    }
+
     end();
     resizable(g_main);
   }
 
+  // d'tor
   virtual ~fileselection() {
     delete tree_;
     delete table_;
@@ -217,6 +280,7 @@ public:
     return load_open_directory();
   }
 
+  // reload directory
   bool refresh() {
     if (!table_->refresh()) move_up_tree();
     return load_open_directory();

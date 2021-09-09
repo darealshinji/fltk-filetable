@@ -39,31 +39,34 @@ class xdg
 {
 public:
   enum {
-    DESKTOP = 0,
-    DOWNLOAD = 1,
-    DOCUMENTS = 2,
-    MUSIC = 3,
-    PICTURES = 4,
-    VIDEOS = 5,
-    LAST = 6
+    DESKTOP     = 0,
+    DOWNLOAD    = 1,
+    DOCUMENTS   = 2,
+    MUSIC       = 3,
+    PICTURES    = 4,
+    PUBLICSHARE = 5,
+    TEMPLATES   = 6,
+    VIDEOS      = 7,
+    LAST        = 8
   };
 
 private:
-  std::string home_dir;
-  std::string dirs[LAST];
+  std::string m_home;
+  std::string m_dirs[LAST];
+  const char *m_base[LAST] = {0};
+  const char *m_var[LAST] = {0};
 
   // lookup XDG entry
-  std::string lookup(FILE *fp, bool use_realpath, const char *type)
+  bool lookup(FILE *fp, unsigned int type, bool within_home, bool use_realpath)
   {
     std::string user_dir;
     char *line = NULL;
-    char *p;
     size_t len = 0;
     ssize_t nread;
 
-    if (!fp || !type || *type == 0) return "";
+    if (!fp || type >= LAST) return false;
 
-    const size_t len_type = strlen(type);
+    const size_t len_type = strlen(m_var[type]);
     rewind(fp);
 
     while ((nread = getline(&line, &len, fp)) != -1) {
@@ -74,11 +77,11 @@ private:
 
       if (*line == 0) continue;
 
-      p = line;
+      char *p = line;
 
       // get the type/key
       while (*p == ' ' || *p == '\t') p++;
-      if (strncmp(p, type, len_type) != 0) continue;
+      if (strncmp(p, m_var[type], len_type) != 0) continue;
       p += len_type;
 
       while (*p == ' ' || *p == '\t') p++;
@@ -100,7 +103,7 @@ private:
       }
 
       if (relative) {
-        user_dir = home_dir;
+        user_dir = m_home;
       } else {
         user_dir.clear();
       }
@@ -108,31 +111,28 @@ private:
       user_dir.reserve(user_dir.length() + strlen(p));
 
       while (*p && *p != '"') {
-        if (*p == '\\' && *(p+1) != 0) {
-          p++;
-        }
-        user_dir.push_back(*p++);
+        if (*p == '\\' && *(p+1) != 0) p++;
+        user_dir.push_back(*p);
+        p++;
       }
     }
 
     free(line);
 
     if (user_dir.empty()) {
-      if (strcmp("XDG_DESKTOP_DIR", type) == 0) {
+      if (type == DESKTOP) {
         // Special case desktop for historical compatibility
-        user_dir = home_dir + "/Desktop";
+        user_dir = m_home + "/Desktop";
       } else {
-        return "";
+        return false;
       }
     }
 
     if (use_realpath) {
-      if ((p = realpath(user_dir.c_str(), NULL)) != NULL) {
-        user_dir = p;
-        free(p);
-      } else {
-        user_dir.clear();
-      }
+      char *rp = realpath(user_dir.c_str(), NULL);
+      if (!rp) return false;
+      user_dir = rp;
+      free(rp);
     } else {
       // remove trailing '/'
       while (user_dir.back() == '/') {
@@ -140,106 +140,110 @@ private:
       }
 
       if (user_dir.empty()) {
-        user_dir = "/";  // string was multiple '/'
+        // string was multiple '/'
+        if (within_home) return false;
+        m_dirs[type] = "/";
+        m_base[type] = "/";
+        return true;
       }
     }
 
-    user_dir.shrink_to_fit();
-
-    return user_dir;
-  }
-
-public:
-  xdg() {}
-  virtual ~xdg() {}
-
-  // load XDG config values
-  bool get(bool use_realpath=true)
-  {
-    FILE *fp;
-    char *p;
-
-    /* get $HOME */
-
-    if ((p = getenv("HOME")) == NULL) {
+    if (within_home && (user_dir.compare(m_home) == 0 ||
+                        strncmp(user_dir.c_str(), m_home.c_str(), m_home.length()) != 0))
+    {
+      // ignore if user_dir equals m_home or
+      // if user_dir doesn't begin with m_home
       return false;
     }
 
-    home_dir = p;
+    m_dirs[type] = user_dir;
+    m_base[type] = strrchr(m_dirs[type].c_str(), '/');
 
-    while (home_dir.back() == '/') {
-      home_dir.pop_back();
-    }
-
-    if (home_dir.empty()) {
+    if (!m_base[type] || *++m_base[type] == 0) {
+      m_base[type] = NULL;
+      m_dirs[type].clear();
       return false;
     }
-
-    home_dir.shrink_to_fit();
-
-    /* fopen() config file */
-
-    p = getenv("XDG_CONFIG_HOME");
-
-    { std::string config_file;  // used only within this scope
-
-      if (!p) {
-        config_file = home_dir + "/.config/user-dirs.dirs";
-      } else {
-        config_file = p;
-        config_file += "/user-dirs.dirs";
-      }
-
-      //config_file = "./user-dirs.dirs";  // test
-
-      if ((fp = fopen(config_file.c_str(), "r")) == NULL) {
-        return false;
-      }
-    } // config_file end
-
-    /* lookup environment variables */
-    dirs[DESKTOP] = lookup(fp, use_realpath, "XDG_DESKTOP_DIR");
-    dirs[DOWNLOAD] = lookup(fp, use_realpath, "XDG_DOWNLOAD_DIR");
-    dirs[DOCUMENTS] = lookup(fp, use_realpath, "XDG_DOCUMENTS_DIR");
-    dirs[MUSIC] = lookup(fp, use_realpath, "XDG_MUSIC_DIR");
-    dirs[PICTURES] = lookup(fp, use_realpath, "XDG_PICTURES_DIR");
-    dirs[VIDEOS] = lookup(fp, use_realpath, "XDG_VIDEOS_DIR");
-
-    fclose(fp);
 
     return true;
   }
 
-  // return $HOME
-  const char *home() {
-    return home_dir.c_str();
+public:
+  xdg()
+  {
+    m_var[DESKTOP]     = "XDG_DESKTOP_DIR";
+    m_var[DOWNLOAD]    = "XDG_DOWNLOAD_DIR";
+    m_var[DOCUMENTS]   = "XDG_DOCUMENTS_DIR";
+    m_var[MUSIC]       = "XDG_MUSIC_DIR";
+    m_var[PICTURES]    = "XDG_PICTURES_DIR";
+    m_var[PUBLICSHARE] = "XDG_PUBLICSHARE_DIR";
+    m_var[TEMPLATES]   = "XDG_TEMPLATES_DIR";
+    m_var[VIDEOS]      = "XDG_VIDEOS_DIR";
   }
 
-  // return string length of $HOME
-  size_t home_length() {
-    return home_dir.length();
+  virtual ~xdg() {}
+
+  // load XDG config values
+  // within_home: if enabled, paths outside or equal $HOME will be ignored
+  // use_realpath: use realpath() to resolve path
+  // returns number of found entries (not counting $HOME) or -1 if $HOME wasn't found
+  int get(bool within_home, bool use_realpath)
+  {
+    FILE *fp;
+
+    /* get $HOME */
+    char *p = getenv("HOME");
+    if (!p) return -1;
+    m_home = p;
+    while (m_home.back() == '/') m_home.pop_back();
+    if (m_home.empty()) return -1;
+    m_home.shrink_to_fit();
+
+    /* fopen() config file */
+    p = getenv("XDG_CONFIG_HOME");
+
+    { std::string s;
+
+      if (p) {
+        s = p;
+        s += "/user-dirs.dirs";
+      } else {
+        s = m_home + "/.config/user-dirs.dirs";
+      }
+
+      fp = fopen(s.c_str(), "r");
+    }
+
+    if (!fp) return 0;
+
+    /* lookup environment variables */
+    int count = 0;
+
+    for (unsigned int i=0; i < LAST; ++i) {
+      if (lookup(fp, i, within_home, use_realpath)) count++;
+    }
+
+    fclose(fp);
+
+    return count;
   }
+
+  // return $HOME
+  const char *home() const { return m_home.empty() ? NULL : m_home.c_str(); }
 
   // return full XDG path by type
-  const char *dir(int type) {
-    return (type >= 0 && type < LAST) ? dirs[type].c_str() : NULL;
+  const char *dir(unsigned int type) const {
+    return (type >= LAST || m_dirs[type].empty()) ? NULL : m_dirs[type].c_str();
   }
 
-  // returns basename of XDG type or empty string on error
-  // never returns NULL
-  const char *basename(int type)
-  {
-    if (type < 0 || type >= LAST || dirs[type].empty()) {
-      return "";
-    }
+  // returns basename of XDG type
+  const char *basename(unsigned int type) const {
+    return (type >= LAST) ? NULL : m_base[type];
+  }
 
-    const char *p = strrchr(dirs[type].c_str(), '/');
-
-    if (!p || *++p == 0) {
-      return dirs[type].c_str();
-    }
-
-    return p;
+  // returns name of XDG variable
+  const char *varname(unsigned int type) const {
+    return (type >= LAST) ? NULL : m_var[type];
   }
 };
 
