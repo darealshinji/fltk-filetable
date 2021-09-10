@@ -36,6 +36,7 @@ int main()
   sel.set_dir("/home/djcj");  // set directory but don't load it
   sel.load_default_icons();
   sel.show_hidden(true);
+  sel.sort_mode(sel.sort_mode() | fltk::filetable_::SORT_DIRECTORY_AS_FILE);
   sel.load_dir();
 
   win.end();

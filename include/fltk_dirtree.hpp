@@ -55,6 +55,19 @@ namespace fltk
 
 class dirtree : public Fl_Tree
 {
+public:
+  // set directory sort behavior
+  enum {
+    // numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
+    SORT_NUMERIC = filetable_::SORT_NUMERIC,
+
+    // case-insensitive sort
+    SORT_IGNORE_CASE = filetable_::SORT_IGNORE_CASE,
+
+    // ignore leading dots in filenames ("a, b, .c" instead of ".c, a, b")
+    SORT_IGNORE_LEADING_DOT = filetable_::SORT_IGNORE_LEADING_DOT
+  };
+
 private:
   enum {
     TYPE_LINK        = 0x01,
@@ -85,10 +98,12 @@ private:
   class sort
   {
   private:
+    uint mode_;
     bool reverse_;
 
   public:
-    sort(bool reverse) {
+    sort(uint mode, bool reverse) {
+      mode_ = mode;
       reverse_ = reverse;
     }
 
@@ -99,10 +114,12 @@ private:
 
       // ignore leading dots in filenames ("bin, .config, data, .local"
       // instead of ".config, .local, bin, data")
-      if (*ap == '.') ap++;
-      if (*bp == '.') bp++;
+      if (mode_ & SORT_IGNORE_LEADING_DOT) {
+        if (*ap == '.') ap++;
+        if (*bp == '.') bp++;
+      }
 
-      if (isdigit(*ap) && isdigit(*bp)) {
+      if ((mode_ & SORT_NUMERIC) && isdigit(*ap) && isdigit(*bp)) {
         // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
         long av = atol(ap);
         long bv = atol(bp);
@@ -113,14 +130,19 @@ private:
         }
       }
 
-      // Alphabetic sort, case-insensitive
-      return reverse_ ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
+      // Alphabetic sort
+      if (mode_ & SORT_IGNORE_CASE) {
+        return reverse_ ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
+      }
+
+      return reverse_ ? strcmp(ap, bp) > 0 : strcmp(ap, bp) < 0;
     }
   };
 
+  std::string callback_item_path_;
   bool show_hidden_ = false;
   bool sort_reverse_ = false;
-  std::string callback_item_path_;
+  uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
 
   Fl_RGB_Image *rgb_[RGB_NUM] = {0};
   Fl_SVG_Image *def_[ICN_NUM] = {0};
@@ -443,7 +465,7 @@ protected:
       return true;
     }
 
-    std::stable_sort(list.begin(), list.end(), sort(sort_reverse()));
+    std::stable_sort(list.begin(), list.end(), sort(sort_mode(), sort_reverse()));
 
     for (const auto e : list) {
       add(ti, e.name);
@@ -657,6 +679,9 @@ public:
 
   void sort_reverse(bool b) { sort_reverse_ = b; }
   bool sort_reverse() const { return sort_reverse_; }
+
+  void sort_mode(uint u) { sort_mode_ = u; }
+  uint sort_mode() const { return sort_mode_; }
 };
 
 } // namespace fltk

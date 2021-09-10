@@ -79,6 +79,14 @@ public:
     STR_SIZE_MAX
   };
 
+  // set file sort behavior
+  enum {
+    SORT_NUMERIC            = 0x0001,  // numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
+    SORT_IGNORE_CASE        = 0x0002,  // case-insensitive sort
+    SORT_IGNORE_LEADING_DOT = 0x0004,  // ignore leading dots in filenames ("a, b, .c" instead of ".c, a, b")
+    SORT_DIRECTORY_AS_FILE  = 0x0100   // don't list directories and files separated
+  };
+
 protected:
   enum EIcn {
     ICN_DIR = 0,  // directory
@@ -108,39 +116,45 @@ private:
   // Sort class to handle sorting column using std::sort
   class sort {
     int _col, _reverse;
+    uint _mode;
 
   public:
-    sort(int col, int reverse) {
+    sort(int col, int reverse, uint mode) {
       _col = col;
       _reverse = reverse;
+      _mode = mode;
     }
 
     bool operator() (Row_t a, Row_t b) {
-      const char *ap = (_col < COL_MAX) ? a.cols[_col] : "";
-      const char *bp = (_col < COL_MAX) ? b.cols[_col] : "";
+      if (_col >= COL_MAX) return false;
 
-      if (a.isdir() != b.isdir()) {
+      const char *ap = a.cols[_col];
+      const char *bp = b.cols[_col];
+
+      if (_col == COL_SIZE) {
+        // on size column always list directories and files separated
+        if (a.isdir() != b.isdir()) {
+          return (a.isdir() && !b.isdir());
+        }
+        return _reverse ? a.bytes<b.bytes : b.bytes<a.bytes;
+      }
+
+      if (!(_mode & SORT_DIRECTORY_AS_FILE) && a.isdir() != b.isdir()) {
         return (a.isdir() && !b.isdir());
       }
-      else if (_col == COL_SIZE) {
-        long as = a.bytes;
-        long bs = b.bytes;
-        return _reverse ? as < bs : bs < as;
-      }
-      else if (_col == COL_LAST_MOD) {
-        long am = a.last_mod;
-        long bm = b.last_mod;
-        return _reverse ? am < bm : bm < am;
+
+      if (_col == COL_LAST_MOD) {
+        return _reverse ? a.last_mod<b.last_mod : b.last_mod<a.last_mod;
       }
 
       // ignore leading dots in filenames ("bin, .config, data, .local"
       // instead of ".config, .local, bin, data")
-      if (_col == COL_NAME) {
+      if (_mode & SORT_IGNORE_LEADING_DOT) {
         if (*ap == '.') ap++;
         if (*bp == '.') bp++;
       }
 
-      if (isdigit(*ap) && isdigit(*bp)) {
+      if ((_mode & SORT_NUMERIC) && isdigit(*ap) && isdigit(*bp)) {
         // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
         long av = atol(ap);
         long bv = atol(bp);
@@ -152,9 +166,16 @@ private:
       }
 
       // Alphabetic sort
-      return _reverse ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
+      if (_mode & SORT_IGNORE_CASE) {
+        return _reverse ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
+      }
+
+      return _reverse ? strcmp(ap, bp) > 0 : strcmp(ap, bp) < 0;
     }
   };
+
+  // default sort modus
+  uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
 
   // sort in reverse order or not
   int sort_reverse_ = 0;
@@ -234,7 +255,7 @@ private:
           // Click diff column? Up sort
           sort_reverse_ = 0;
         }
-        sort_column(col, sort_reverse_);
+        sort_column(col);
         last_row_sorted_ = col;
       }
       last_row_clicked_ = -1;
@@ -477,7 +498,7 @@ protected:
   }
 
   // Sort a column up or down
-  void sort_column(int col, int reverse=0)
+  void sort_column(int col)
   {
     // save current selection state in rowdata_
     for (int i = 0; i < rows(); ++i) {
@@ -485,7 +506,7 @@ protected:
     }
 
     // sort data while preserving order between equal elements
-    std::stable_sort(rowdata_.begin(), rowdata_.end(), sort(col, reverse));
+    std::stable_sort(rowdata_.begin(), rowdata_.end(), sort(col, sort_reverse_, sort_mode()));
 
     // update table row selection from rowdata_
     for (int i = 0; i < rows(); ++i) {
@@ -1168,6 +1189,7 @@ public:
   void autowidth_padding(int i) { autowidth_padding_ = (i < 0) ? 0 : i; }
   void autowidth_max(int i) { autowidth_max_ = i; }
   void show_hidden(bool b) { show_hidden_ = b; }
+  void sort_mode(uint u) { sort_mode_ = u; }
 
   // get
   const char *label_header(ECol idx) const { return label_header_[idx]; }
@@ -1180,6 +1202,7 @@ public:
   int autowidth_padding() const { return autowidth_padding_; }
   int autowidth_max() const { return autowidth_max_; }
   bool show_hidden() const { return show_hidden_; }
+  uint sort_mode() const { return sort_mode_; }
 };
 
 bool filetable_::within_double_click_timelimit_ = false;

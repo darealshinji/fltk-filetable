@@ -68,6 +68,23 @@ class fileselection : public Fl_Group
   static_assert(std::is_base_of<filetable_, T>::value,
                 "class was not derived from fltk::filetable_");
 
+public:
+
+  // set file sort behavior
+  enum {
+    // numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
+    SORT_NUMERIC = T::SORT_NUMERIC,
+
+    // case-insensitive sort
+    SORT_IGNORE_CASE = T::SORT_IGNORE_CASE,
+
+    // ignore leading dots in filenames ("a, b, .c" instead of ".c, a, b")
+    SORT_IGNORE_LEADING_DOT = T::SORT_IGNORE_LEADING_DOT,
+
+    // don't list directories and files separated
+    SORT_DIRECTORY_AS_FILE = T::SORT_DIRECTORY_AS_FILE
+  };
+
 private:
 
   // create a subclass with an overloaded double_click_callback() method
@@ -146,17 +163,18 @@ private:
     }
   };
 
-  std::string selection_;
-  dirtree *tree_;
-  filetable_sub *table_;
-  addressline *addr_;
-
   typedef struct {
     fileselection *obj;
     std::string str;
   } cb_data;
 
   cb_data data_[xdg::LAST + 1]; // XDG dirs + $HOME
+  std::string selection_;
+  uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
+
+  dirtree *tree_;
+  filetable_sub *table_;
+  addressline *addr_;
 
   Fl_Group *g_but;
   Fl_Tile *g_main;
@@ -420,6 +438,9 @@ public:
 
   void filesize_label(filetable_::EStrSize idx, const char *l) {table_->filesize_label(idx, l);}
   const char *filesize_label(filetable_::EStrSize idx) const {return table_->filesize_label(idx);}
+
+  void sort_mode(uint u) {tree_->sort_mode(u); table_->sort_mode(u);}
+  uint sort_mode() const {return table_->sort_mode();}
 };
 
 } // namespace fltk
