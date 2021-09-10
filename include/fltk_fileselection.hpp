@@ -26,14 +26,17 @@
 #define fltk_fileselection_hpp
 
 #include <FL/Fl.H>
+#include <FL/Fl_Group.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
-#include <FL/Fl_Group.H>
+#include <FL/Fl_Toggle_Button.H>
 #include <FL/Fl_Menu_Button.H>
 #include <FL/Fl_Menu_Item.H>
+#include <FL/Fl_Input.H>
 #include <FL/Fl_Tile.H>
 #include <string>
 #include <vector>
+#include <string.h>
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
@@ -50,7 +53,7 @@
 
 
 // TODO:
-// * focus remains on tree_
+// * focus issues
 // * random crashes on selection when using fltk::filetable_magic
 
 
@@ -81,11 +84,72 @@ private:
     filetable_sub(int X, int Y, int W, int H, fileselection *fs) : T(X,Y,W,H,NULL) {
       fs_ptr = fs;
     }
+
+    void set_dir(const char *dirname) {
+      if (dirname) T::open_directory_ = dirname;
+    }
+  };
+
+  class addressline : public Fl_Input
+  {
+  private:
+    Fl_Menu_Item menu_[4] = {
+      { "Copy selection", 0, copy_selection_cb, this, FL_MENU_INACTIVE },
+      { "Copy line",      0, copy_cb,           this, FL_MENU_DIVIDER },
+      { "Dismiss" },
+      {0}
+    };
+
+    int handle(int event)
+    {
+      switch (event) {
+        case FL_UNFOCUS:
+          position(0);
+          break;
+
+        case FL_PUSH:
+          if (Fl::event_button() == FL_RIGHT_MOUSE) {
+            // change cursor back to default
+            if (active_r() && window()) window()->cursor(FL_CURSOR_DEFAULT);
+
+            // activate "Copy selection" entry if text was selected
+            if (position() == mark()) {
+              menu_[0].deactivate();
+            } else {
+              menu_[0].activate();
+            }
+
+            // popup menu and do callback
+            const Fl_Menu_Item *m = menu_->popup(Fl::event_x(), Fl::event_y());
+            if (m && m->callback_) m->do_callback(NULL);
+          }
+          break;
+
+        default:
+          break;
+      }
+      return Fl_Input::handle(event);
+    }
+
+    static void copy_selection_cb(Fl_Widget *, void *v) {
+      reinterpret_cast<addressline *>(v)->copy(1);
+    }
+
+    static void copy_cb(Fl_Widget *, void *v) {
+      const char *text = reinterpret_cast<addressline *>(v)->value();
+      if (text) Fl::copy(text, strlen(text), 1);
+    }
+
+  public:
+    addressline(int X, int Y, int W, int H) : Fl_Input(X,Y,W,H, NULL) {
+      readonly(1);
+    }
   };
 
   std::string selection_;
   dirtree *tree_;
   filetable_sub *table_;
+  addressline *addr_;
 
   typedef struct {
     fileselection *obj;
@@ -94,11 +158,12 @@ private:
 
   cb_data data_[xdg::LAST + 1]; // XDG dirs + $HOME
 
-  Fl_Group *g_top;
+  Fl_Group *g_but;
   Fl_Tile *g_main;
   Fl_Menu_Button *b_places;
   Fl_Button *b_up, *b_reload;
-  Fl_Box *g_top_dummy;
+  Fl_Toggle_Button *b_hidden;
+  Fl_Box *g_but_dummy;
 
 protected:
 
@@ -132,20 +197,31 @@ protected:
     }
   }
 
-  // load currently open directory for tree_ and table_
+  // load currently open directory in tree_
   bool load_open_directory()
   {
-    bool rv = tree_->load_dir(table_->open_directory());
+    const char *dir = table_->open_directory();
+
+    addr_->value(dir);
+    tree_->close_root();
+    if (!dir) return false;
+
+    bool rv = tree_->load_dir(dir);
     if (rv) tree_->calc_tree();
 
     if (table_->open_directory_is_root()) {
       b_up->deactivate();
       tree_->hposition(0);
       tree_->vposition(0);
+      tree_->set_item_focus(tree_->root());
     } else {
       b_up->activate();
       // scroll down tree
-      if (rv) tree_->show_item(tree_->find_item(table_->open_directory()));
+      if (rv) {
+        auto item = tree_->find_item(dir);
+        tree_->show_item(item);
+        tree_->set_item_focus(item);
+      }
     }
 
     return rv;
@@ -175,6 +251,11 @@ protected:
     }
   }
 
+  void toggle_hidden() {
+    show_hidden(show_hidden() ? false : true);
+    refresh();
+  }
+
   static void places_cb(Fl_Widget *, void *v) {
     cb_data *dat = reinterpret_cast<cb_data *>(v);
     dat->obj->load_dir(dat->str.c_str());
@@ -186,32 +267,38 @@ public:
   fileselection(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Group(X,Y,W,H,L)
   {
+    addr_ = new addressline(X, Y, W, FL_NORMAL_SIZE + 12);
+
     // top bar with buttons and such
-    g_top = new Fl_Group(X, Y, W, 46);
+    g_but = new Fl_Group(X, addr_->y() + addr_->h() + 4, W, 46);
     {
-      b_places = new Fl_Menu_Button(g_top->x(), g_top->y(), 72, g_top->h() - 6, "Places");
+      b_places = new Fl_Menu_Button(g_but->x(), g_but->y(), 72, g_but->h() - 4, "Places");
       b_places->add("\\/", 0, FS_CALLBACK(load_dir("/")), this);
 
-      b_up = new Fl_Button(b_places->x() + b_places->w() + 4, g_top->y(), b_places->h(), b_places->h(), "@+78->");
+      b_up = new Fl_Button(b_places->x() + b_places->w() + 4, g_but->y(), b_places->h(), b_places->h(), "@+78->");
       b_up->callback(FS_CALLBACK(dir_up()), this);
 
-      b_reload = new Fl_Button(b_up->x() + b_up->w() + 4, g_top->y(), b_up->h(), b_up->h(), "@+4reload");
+      b_reload = new Fl_Button(b_up->x() + b_up->w() + 4, g_but->y(), b_up->h(), b_up->h(), "@+4reload");
       b_reload->callback(FS_CALLBACK(refresh()), this);
 
-      g_top_dummy = new Fl_Box(b_reload->x() + b_reload->w(), g_top->y(), 1, 1);
+      b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w() + 4, g_but->y(), 60, b_reload->h(), "Hidden\nfiles");
+      b_hidden->callback(FS_CALLBACK(toggle_hidden()), this);
+
+      g_but_dummy = new Fl_Box(b_hidden->x() + b_hidden->w(), g_but->y(), 1, 1);
     }
-    g_top->end();
-    g_top->resizable(g_top_dummy);
+    g_but->end();
+    g_but->resizable(g_but_dummy);
 
     // main part with tree and filetable
-    g_main = new Fl_Tile(X, Y + g_top->h(), W, H - g_top->h());
+    g_main = new Fl_Tile(X, g_but->y() + g_but->h(), W, H - g_but->h() - g_but->y());
     {
       tree_ = new dirtree(g_main->x(), g_main->y(), g_main->w()/4, g_main->h());
       tree_->callback(FS_CALLBACK(tree_callback()), this);
+      tree_->selection_color(FL_WHITE);
 
       table_ = new filetable_sub(tree_->x() + tree_->w(), g_main->y(), g_main->w() - tree_->w(), g_main->h(), this);
 
-      tree_->selection_color(table_->selection_color());
+      //tree_->selection_color(table_->selection_color());
     }
     g_main->end();
 
@@ -268,6 +355,11 @@ public:
     delete table_;
   }
 
+  // set directory without loading it; use refresh() to load it
+  void set_dir(const char *dirname) {
+    table_->set_dir(dirname);
+  }
+
   // calls load_dir() on table_ and tree_
   bool load_dir(const char *dirname) {
     if (!table_->load_dir(dirname)) return false;
@@ -286,6 +378,9 @@ public:
     return load_open_directory();
   }
 
+  // alternative to refresh()
+  bool load_dir() { return refresh(); }
+
   // returns selection
   const char *selection() {
     return selection_.empty() ? NULL : selection_.c_str();
@@ -299,13 +394,13 @@ public:
   void labelsize(int i) {tree_->labelsize(i); table_->labelsize(i);}
   int labelsize() const {return table_->labelsize();}
 
-  void color(Fl_Color c) {tree_->color(c); table_->color(c);}
+  void color(Fl_Color c) {tree_->color(c); tree_->selection_color(c); table_->color(c);}
   Fl_Color color() const {return table_->color();}
 
-  void selection_color(Fl_Color c) {tree_->selection_color(c); table_->selection_color(c);}
+  void selection_color(Fl_Color c) {/*tree_->selection_color(c);*/ table_->selection_color(c);}
   Fl_Color selection_color() const {return table_->selection_color();}
 
-  void show_hidden(bool b) {tree_->show_hidden(b); table_->show_hidden(b);}
+  void show_hidden(bool b) {tree_->show_hidden(b); table_->show_hidden(b); b_hidden->value(b);}
   bool show_hidden() const {return table_->show_hidden();}
 
   void double_click_timeout(double d) {table_->double_click_timeout(d);}

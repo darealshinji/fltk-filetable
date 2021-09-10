@@ -33,8 +33,10 @@ int main()
   Fl_Double_Window win(800, 600, "Test");
 
   fltk::fileselection<fltk::filetable_simple> sel(10, 10, win.w()-20, win.h()-20);
+  sel.set_dir("/home/djcj");  // set directory but don't load it
   sel.load_default_icons();
-  sel.load_dir(".");
+  sel.show_hidden(true);
+  sel.load_dir();
 
   win.end();
   win.resizable(sel);

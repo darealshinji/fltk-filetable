@@ -209,7 +209,7 @@ private:
     FLTK_FMT_FLOAT " TiB "
   };
 
-  // this string is used to be strdup()ed instread of being
+  // this string is used to be strdup()ed instead of being
   // created with printf_alloc() each time
   std::string str_unknown_elements_ = "?? elements ";
 
@@ -525,27 +525,36 @@ protected:
     int ret = Fl_Table_Row::handle(event);
     reserve_entries_ = 0;
 
-    if (callback_context() == CONTEXT_CELL) {
-      if (event == FL_RELEASE) {
-        if (dc_timeout_ == 0) {   // double click was disabled
-          reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
-          double_click_callback();
-        } else if (last_row_clicked_ == callback_row() && within_double_click_timelimit_) {  // double click
-          Fl::remove_timeout(reset_timelimit_cb);
-          within_double_click_timelimit_ = false;
-          reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
-          double_click_callback();
-        } else {
-          Fl::remove_timeout(reset_timelimit_cb);
-          within_double_click_timelimit_ = true;
-          Fl::add_timeout(dc_timeout_, reset_timelimit_cb);
+    switch (callback_context()) {
+      case CONTEXT_CELL:
+        if (event == FL_RELEASE) {
+          if (dc_timeout_ == 0) {   // double click was disabled
+            reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
+            double_click_callback();
+          } else if (last_row_clicked_ == callback_row() && within_double_click_timelimit_) {  // double click
+            Fl::remove_timeout(reset_timelimit_cb);
+            within_double_click_timelimit_ = false;
+            reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
+            double_click_callback();
+          } else {
+            Fl::remove_timeout(reset_timelimit_cb);
+            within_double_click_timelimit_ = true;
+            Fl::add_timeout(dc_timeout_, reset_timelimit_cb);
+          }
+          last_row_clicked_ = callback_row();
         }
-        last_row_clicked_ = callback_row();
-      }
-    } else {
-      // not clicked on a cell -> remove timout
-      Fl::remove_timeout(reset_timelimit_cb);
-      within_double_click_timelimit_ = false;
+        break;
+
+      case CONTEXT_TABLE:
+        // "outside" area -> clear selection
+        select_all_rows(0);
+        // fall through to default case
+
+      default:
+        // not clicked on a cell -> remove timout
+        Fl::remove_timeout(reset_timelimit_cb);
+        within_double_click_timelimit_ = false;
+        break;
     }
 
     //redraw();
@@ -761,6 +770,7 @@ public:
     col_resize(1);
     col_resize_min(col_name_extra_w() + blend_w());
     autowidth_max(W - col_name_extra_w());
+    type(SELECT_SINGLE);
 
     when(FL_WHEN_RELEASE);
     callback(static_cast<void(*)(Fl_Widget *)>(
