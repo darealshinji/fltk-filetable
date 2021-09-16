@@ -29,6 +29,7 @@
 #include <FL/Fl_Group.H>
 #include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
+#include <FL/Fl_Return_Button.H>
 #include <FL/Fl_Toggle_Button.H>
 #include <FL/Fl_Menu_Button.H>
 #include <FL/Fl_Menu_Item.H>
@@ -165,7 +166,7 @@ private:
 
   typedef struct {
     fileselection *obj;
-    std::string str;
+    std::string path;
   } cb_data;
 
   cb_data data_[xdg::LAST + 1]; // XDG dirs + $HOME
@@ -176,20 +177,27 @@ private:
   filetable_sub *table_;
   addressline *addr_;
 
-  Fl_Group *g_but;
+  Fl_Group *g_top, *g_bot;
   Fl_Tile *g_main;
   Fl_Menu_Button *b_places;
-  Fl_Button *b_up, *b_reload;
+  Fl_Button *b_up, *b_reload, *b_cancel;
+  Fl_Return_Button *b_ok;
   Fl_Toggle_Button *b_hidden;
-  Fl_Box *g_but_dummy;
+  Fl_Box *g_top_dummy, *g_bot_dummy;
 
 protected:
 
   virtual void double_click_callback()
   {
-    if (table_->last_clicked_item_isdir()) {
+    if (!table_->selected()) {
+      // called by other means than a double click (i.e. button)
+      // and nothing was yet selected -> quit
+      window()->hide();
+    } else if (table_->last_clicked_item_isdir()) {
+      // double click on directory -> load directory
       load_dir(table_->last_clicked_item().c_str());
     } else {
+      // set selection and quit
       selection_ = table_->last_clicked_item();
       window()->hide();
     }
@@ -197,19 +205,23 @@ protected:
 
   void tree_callback()
   {
-    switch(tree_->callback_reason()) {
+    switch(tree_->callback_reason())
+    {
       case FL_TREE_REASON_RESELECTED:
       case FL_TREE_REASON_SELECTED:
         if (!load_dir(tree_->callback_item_path())) {
           tree_->open_callback_item();  // sets the item as "no access"
         }
         break;
+
       case FL_TREE_REASON_OPENED:
         tree_->open_callback_item();
         break;
+
       case FL_TREE_REASON_CLOSED:
         tree_->close_callback_item();
         break;
+
       default:
         break;
     }
@@ -270,13 +282,26 @@ protected:
   }
 
   void toggle_hidden() {
-    show_hidden(show_hidden() ? false : true);
+    show_hidden(show_hidden() ^ 1);
     refresh();
   }
 
   static void places_cb(Fl_Widget *, void *v) {
     cb_data *dat = reinterpret_cast<cb_data *>(v);
-    dat->obj->load_dir(dat->str.c_str());
+    dat->obj->load_dir(dat->path.c_str());
+  }
+
+  int handle(int event)
+  {
+    if (event == FL_NO_EVENT) return 1;
+
+    if (table_->selected()) {
+      b_ok->activate();
+    } else {
+      b_ok->deactivate();
+    }
+
+    return Fl_Group::handle(event);
   }
 
 public:
@@ -285,40 +310,62 @@ public:
   fileselection(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Group(X,Y,W,H,L)
   {
-    addr_ = new addressline(X, Y, W, FL_NORMAL_SIZE + 12);
-
-    // top bar with buttons and such
-    g_but = new Fl_Group(X, addr_->y() + addr_->h() + 4, W, 46);
+    // top buttons
+    int but_y = 0;
+    g_top = new Fl_Group(X, Y, W, FL_NORMAL_SIZE + 12 + 50);
     {
-      b_places = new Fl_Menu_Button(g_but->x(), g_but->y(), 72, g_but->h() - 4, "Places");
-      b_places->add("\\/", 0, FS_CALLBACK(load_dir("/")), this);
+      addr_ = new addressline(X, Y, W, FL_NORMAL_SIZE + 12);
+      but_y = Y + addr_->h() + 4;
 
-      b_up = new Fl_Button(b_places->x() + b_places->w() + 4, g_but->y(), b_places->h(), b_places->h(), "@+78->");
-      b_up->callback(FS_CALLBACK(dir_up()), this);
+      b_places = new Fl_Menu_Button(X, but_y, 72, 42, "Places");
+      b_places->add("\\/", 0, FS_CALLBACK( load_dir("/") ), this);
 
-      b_reload = new Fl_Button(b_up->x() + b_up->w() + 4, g_but->y(), b_up->h(), b_up->h(), "@+4reload");
-      b_reload->callback(FS_CALLBACK(refresh()), this);
+      b_up = new Fl_Button(X + 72, but_y, 42, 42, "@+78->");
+      b_up->callback(FS_CALLBACK( dir_up() ), this);
 
-      b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w() + 4, g_but->y(), 60, b_reload->h(), "Hidden\nfiles");
-      b_hidden->callback(FS_CALLBACK(toggle_hidden()), this);
+      b_reload = new Fl_Button(b_up->x() + 42, but_y, 42, 42, "@+4reload");
+      b_reload->callback(FS_CALLBACK( refresh() ), this);
 
-      g_but_dummy = new Fl_Box(b_hidden->x() + b_hidden->w(), g_but->y(), 1, 1);
+      b_hidden = new Fl_Toggle_Button(b_reload->x() + 42, but_y, 60, 42, "Hidden\nfiles");
+      b_hidden->callback(FS_CALLBACK( toggle_hidden() ), this);
+
+      g_top_dummy = new Fl_Box(b_hidden->x() + b_hidden->w(), but_y, 1, 1);
     }
-    g_but->end();
-    g_but->resizable(g_but_dummy);
+    g_top->end();
+    g_top->resizable(g_top_dummy);
 
     // main part with tree and filetable
-    g_main = new Fl_Tile(X, g_but->y() + g_but->h(), W, H - g_but->h() - g_but->y());
+    int g_bot_h = 38;
+    int main_y = Y + g_top->h();
+    int main_h = H - main_y - g_bot_h;
+    g_main = new Fl_Tile(X, main_y, W, main_h);
     {
-      tree_ = new dirtree(g_main->x(), g_main->y(), g_main->w()/4, g_main->h());
-      tree_->callback(FS_CALLBACK(tree_callback()), this);
+      tree_ = new dirtree(X, main_y, W/4, main_h);
+      tree_->callback(FS_CALLBACK( tree_callback() ), this);
       tree_->selection_color(FL_WHITE);
 
-      table_ = new filetable_sub(tree_->x() + tree_->w(), g_main->y(), g_main->w() - tree_->w(), g_main->h(), this);
+      table_ = new filetable_sub(X + W/4, main_y, W - W/4, main_h, this);
 
       //tree_->selection_color(table_->selection_color());
     }
     g_main->end();
+
+    // OK/Cancel buttons
+    int bot_y = main_y + main_h;
+    g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
+    {
+      b_ok = new Fl_Return_Button(X + W - 90, bot_y + 4, 90, 34, "OK");
+      b_ok->callback(FS_CALLBACK( double_click_callback() ), this);
+      b_ok->deactivate();
+
+      b_cancel = new Fl_Button(X + W - 184, bot_y + 4, 90, 34, "Cancel");
+      b_cancel->callback(FS_CALLBACK( window()->hide() ), this);
+
+      g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + 4, 1, 1);
+    }
+    g_bot->end();
+    g_bot->resizable(g_bot_dummy);
+
 
     // create "places" menu entries
     xdg xdg;
@@ -341,6 +388,7 @@ public:
       std::vector<int> xdg_vec_;
       xdg_vec_.reserve(xdg::LAST - 1);
 
+      // xdg::DESKTOP == 0, so start with 1
       for (int i = 1; i < xdg::LAST; ++i) {
         if (xdg.dir(i) && xdg.basename(i)) {
           xdg_vec_.push_back(i);
@@ -348,7 +396,7 @@ public:
       }
 
       if (xdg_vec_.size() > 0) {
-        auto lambda = [xdg](const int a, const int b) {
+        auto lambda = [xdg] (const int a, const int b) {
           return strcasecmp(xdg.basename(a), xdg.basename(b)) < 0;
         };
         std::sort(xdg_vec_.begin(), xdg_vec_.end(), lambda);
@@ -369,8 +417,8 @@ public:
 
   // d'tor
   virtual ~fileselection() {
-    delete tree_;
-    delete table_;
+    if (tree_) delete tree_;
+    if (table_) delete table_;
   }
 
   // set directory without loading it; use refresh() to load it

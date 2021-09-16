@@ -53,6 +53,7 @@
 #define FLTK_FMT_FLOAT "%.1Lf"
 #endif
 
+// explicitly set focus during draw()?
 
 namespace fltk
 {
@@ -156,8 +157,8 @@ private:
 
       if ((_mode & SORT_NUMERIC) && isdigit(*ap) && isdigit(*bp)) {
         // Numeric sort ("1, 2, 3, 100" instead of "1, 100, 2, 3")
-        long av = atol(ap);
-        long bv = atol(bp);
+        long long av = atoll(ap);
+        long long bv = atoll(bp);
 
         // if numbers are the same, continue to alphabetic sort
         if (av != bv) {
@@ -569,6 +570,7 @@ protected:
       case CONTEXT_TABLE:
         // "outside" area -> clear selection
         select_all_rows(0);
+        last_row_clicked_ = -1;
         // fall through to default case
 
       default:
@@ -1132,6 +1134,8 @@ public:
 
   std::string last_clicked_item()
   {
+    if (last_row_clicked_ == -1) return "";
+
     char * const name = rowdata_.at(last_row_clicked_).cols[COL_NAME];
 
     if (open_directory_.empty()) {
@@ -1148,8 +1152,10 @@ public:
   }
 
   bool last_clicked_item_isdir() const {
-    return rowdata_.at(last_row_clicked_).isdir();
+    return (last_row_clicked_ == -1) ? false : rowdata_.at(last_row_clicked_).isdir();
   }
+
+  bool selected() const { return last_row_clicked_ != -1; }
 
   const char *open_directory() const {
     return open_directory_.empty() ? NULL : open_directory_.c_str();
