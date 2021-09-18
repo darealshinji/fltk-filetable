@@ -260,6 +260,8 @@ protected:
   // move up the tree until we can open a directory, otherwise open root
   void move_up_tree()
   {
+    if (!table_->open_directory()) return;
+
     std::string s = filetable_::simplify_directory_path(table_->open_directory());
     char * const path = const_cast<char *>(s.data());
     char *p = path + s.length();
