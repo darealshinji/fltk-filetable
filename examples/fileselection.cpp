@@ -32,11 +32,11 @@ int main()
 {
   Fl_Double_Window win(800, 600, "Test");
 
-  fltk::fileselection<fltk::filetable_simple> sel(4, 4, win.w()-8, win.h()-8);
+  fltk::fileselection<> sel(4, 4, win.w() - 8, win.h() - 8);
   sel.set_dir("/home/djcj");  // set directory but don't load it
   sel.load_default_icons();
-  sel.show_hidden(true);
-  sel.sort_mode(sel.sort_mode() | fltk::filetable_::SORT_DIRECTORY_AS_FILE);
+  //sel.show_hidden(true);
+  //sel.sort_mode(sel.sort_mode() | fltk::filetable_::SORT_DIRECTORY_AS_FILE);
   sel.load_dir();
 
   win.end();

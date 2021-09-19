@@ -401,22 +401,18 @@ protected:
     }
 
     switch (context) {
-/*
       case CONTEXT_ENDPAGE:
-        // create a gray stripe on the height of the column headers
-        // issue: will overlay scroll bars
-        fl_push_clip(tox, wiy, tow, col_header_height());
-          fl_draw_box(FL_THIN_UP_BOX, tox, wiy, tow, col_header_height(), FL_BACKGROUND_COLOR);
-        fl_pop_clip();
-
-        // redraw column headers to become visible again
-        for (int i=0; i < COL_MAX; ++i) {
-          int hX, hY, hW, hH;
-          find_cell(CONTEXT_COL_HEADER, 0, i, hX, hY, hW, hH);
-          draw_cell(CONTEXT_COL_HEADER, 0, i, hX, hY, hW, hH);
+        // both scrollbars visible -> draw gray box in lower right
+        if (vscrollbar->visible() && hscrollbar->visible()) {
+          fl_rectf(vscrollbar->x(), hscrollbar->y(), vscrollbar->w(), hscrollbar->h(), FL_BACKGROUND_COLOR);
+        }
+        // draw remaining header area in gray
+        if (table_w < tiw && col_header()) {
+          int rect_w = tiw - table_w + Fl::box_dw(table->box()) - Fl::box_dx(table->box());
+          fl_draw_box(FL_THIN_UP_BOX, tix + table_w, wiy, rect_w, col_header_height(), FL_BACKGROUND_COLOR);
         }
         break;
-*/
+
       case CONTEXT_COL_HEADER:
         fl_push_clip(X, Y, W, H); {
           fl_draw_box(FL_THIN_UP_BOX, X, Y, W, H, FL_BACKGROUND_COLOR);
@@ -435,20 +431,18 @@ protected:
           Fl_Color bgcol = color();
           Fl_Align al = (C == COL_SIZE) ? FL_ALIGN_RIGHT : FL_ALIGN_LEFT;
           Fl_RGB_Image *blend = icon_blend_[0];
-          int fw = 0;
 
           if (row_selected(R)) {
             blend = icon_blend_[1];
             bgcol = selection_color();
           }
 
-          if (C != COL_LAST_MOD) {
-            int fh = 0;
-            fl_measure(rowdata_.at(R).cols[C], fw, fh, 0);
+          int fw = 0;
+          int fh = 0;
+          fl_measure(rowdata_.at(R).cols[C], fw, fh, 0);
 
-            if (C == COL_SIZE && fw > W) {
-              al = FL_ALIGN_LEFT;
-            }
+          if (C == COL_SIZE && fw > W) {
+            al = FL_ALIGN_LEFT;
           }
 
           // Bg color
@@ -542,14 +536,16 @@ protected:
     }
   }
 
-  int handle(int event)
+  int handle(int e)
   {
-    int ret = Fl_Table_Row::handle(event);
+    if (e == FL_NO_EVENT) return 0;
+
+    int ret = Fl_Table_Row::handle(e);
     reserve_entries_ = 0;
 
     switch (callback_context()) {
       case CONTEXT_CELL:
-        if (event == FL_RELEASE) {
+        if (e == FL_RELEASE) {
           if (dc_timeout_ == 0) {   // double click was disabled
             reserve_entries_ = rowdata_.at(last_row_clicked_).bytes;
             double_click_callback();
@@ -564,6 +560,10 @@ protected:
             Fl::add_timeout(dc_timeout_, reset_timelimit_cb);
           }
           last_row_clicked_ = callback_row();
+
+          //int rX, rY, rW, rH;
+          //find_cell(CONTEXT_CELL, last_row_clicked_, 0, rX, rY, rW, rH);
+          //draw_focus(box(), rX, rY, w(), rH);
         }
         break;
 
@@ -571,7 +571,7 @@ protected:
         // "outside" area -> clear selection
         select_all_rows(0);
         last_row_clicked_ = -1;
-        // fall through to default case
+        //FALLTHROUGH
 
       default:
         // not clicked on a cell -> remove timout
@@ -580,7 +580,7 @@ protected:
         break;
     }
 
-    //redraw();
+    redraw();
 
     return ret;
   }

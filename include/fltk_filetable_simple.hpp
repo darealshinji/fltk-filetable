@@ -44,7 +44,7 @@ private:
     bool alloc;
   } svg_t;
 
-  svg_t icn_[ICN_LAST];
+  svg_t icn_[ICN_LAST] = {0};
 
   Fl_SVG_Image *icon(Row_t r) const override
   {
@@ -68,16 +68,15 @@ private:
   }
 
 public:
-  filetable_simple(int X, int Y, int W, int H, const char *L=NULL) : filetable_(X,Y,W,H,L)
+  // c'tor
+  filetable_simple(int X, int Y, int W, int H, const char *L=NULL)
+  : filetable_(X,Y,W,H,L)
   {
-    for (int i = 0; i < ICN_LAST; ++i) {
-      icn_[i].svg = NULL;
-      icn_[i].alloc = false;
-    }
     svg_link_ = icn_[ICN_LINK].svg;
     svg_noaccess_ = icn_[ICN_LOCK].svg;
   }
 
+  // d'tor
   virtual ~filetable_simple()
   {
     for (int i = 0; i < ICN_LAST; ++i) {

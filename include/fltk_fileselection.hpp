@@ -62,7 +62,7 @@
 namespace fltk
 {
 
-template<class T>
+template<class T=filetable_simple>
 class fileselection : public Fl_Group
 {
   // assert if template argument was not a subclass of fltk::filetable_
@@ -309,26 +309,31 @@ protected:
 public:
 
   // c'tor
-  fileselection(int X, int Y, int W, int H, const char *L=NULL)
-  : Fl_Group(X,Y,W,H,L)
+  fileselection(int X, int Y, int W, int H, int spacing=4)
+  : Fl_Group(X,Y,W,H, NULL)
   {
-    // top buttons
-    int but_y = 0;
-    g_top = new Fl_Group(X, Y, W, FL_NORMAL_SIZE + 12 + 50);
-    {
-      addr_ = new addressline(X, Y, W, FL_NORMAL_SIZE + 12);
-      but_y = Y + addr_->h() + 4;
+    if (spacing < 0) spacing = 0;
+    if (spacing > 24) spacing = 24;
 
-      b_places = new Fl_Menu_Button(X, but_y, 72, 42, "Places");
+    // top buttons
+    const int addr_h = FL_NORMAL_SIZE + 12;
+    const int but_h = 42;
+
+    g_top = new Fl_Group(X, Y, W, addr_h + but_h + spacing*2);
+    {
+      addr_ = new addressline(X, Y, W, addr_h);
+      const int but_y = addr_->y() + addr_->h() + spacing;
+
+      b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
       b_places->add("\\/", 0, FS_CALLBACK( load_dir("/") ), this);
 
-      b_up = new Fl_Button(X + 72, but_y, 42, 42, "@+78->");
+      b_up = new Fl_Button(X + 72, but_y, but_h, but_h, "@+78->");
       b_up->callback(FS_CALLBACK( dir_up() ), this);
 
-      b_reload = new Fl_Button(b_up->x() + 42, but_y, 42, 42, "@+4reload");
+      b_reload = new Fl_Button(b_up->x() + but_h, but_y, but_h, but_h, "@+4reload");
       b_reload->callback(FS_CALLBACK( refresh() ), this);
 
-      b_hidden = new Fl_Toggle_Button(b_reload->x() + 42, but_y, 60, 42, "Hidden\nfiles");
+      b_hidden = new Fl_Toggle_Button(b_reload->x() + but_h, but_y, 60, but_h, "Hidden\nfiles");
       b_hidden->callback(FS_CALLBACK( toggle_hidden() ), this);
 
       g_top_dummy = new Fl_Box(b_hidden->x() + b_hidden->w(), but_y, 1, 1);
@@ -337,33 +342,34 @@ public:
     g_top->resizable(g_top_dummy);
 
     // main part with tree and filetable
-    int g_bot_h = 38;
-    int main_y = Y + g_top->h();
-    int main_h = H - main_y - g_bot_h;
-    g_main = new Fl_Tile(X, main_y, W, main_h);
+    const int g_bot_h = 34 + spacing;
+    const int main_h = H - g_top->h() - g_bot_h;
+
+    g_main = new Fl_Tile(X, Y + g_top->h(), W, main_h);
     {
-      tree_ = new dirtree(X, main_y, W/4, main_h);
+      tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
       tree_->callback(FS_CALLBACK( tree_callback() ), this);
       tree_->selection_color(FL_WHITE);
 
-      table_ = new filetable_sub(X + W/4, main_y, W - W/4, main_h, this);
+      table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
 
       //tree_->selection_color(table_->selection_color());
     }
     g_main->end();
 
     // OK/Cancel buttons
-    int bot_y = main_y + main_h;
+    const int bot_y = g_main->y() + g_main->h();
+
     g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
     {
-      b_ok = new Fl_Return_Button(X + W - 90, bot_y + 4, 90, 34, "OK");
+      b_ok = new Fl_Return_Button(X + W - 90, bot_y + spacing, 90, g_bot_h - spacing, "OK");
       b_ok->callback(FS_CALLBACK( double_click_callback() ), this);
       b_ok->deactivate();
 
-      b_cancel = new Fl_Button(X + W - 184, bot_y + 4, 90, 34, "Cancel");
+      b_cancel = new Fl_Button(X + W - 180 - spacing, bot_y + spacing, 90, g_bot_h - spacing, "Cancel");
       b_cancel->callback(FS_CALLBACK( window()->hide() ), this);
 
-      g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + 4, 1, 1);
+      g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + spacing, 1, 1);
     }
     g_bot->end();
     g_bot->resizable(g_bot_dummy);
@@ -371,7 +377,7 @@ public:
 
     // create "places" menu entries
     xdg xdg;
-    int rv = xdg.get(true, true);
+    const int rv = xdg.get(true, true);
 
     // $HOME
     if (rv != -1) {

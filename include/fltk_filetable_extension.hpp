@@ -45,7 +45,7 @@ private:
     Fl_SVG_Image *svg;
   } icn_t;
 
-  Fl_SVG_Image *icn_[ICN_LOCK + 1];
+  Fl_SVG_Image *icn_[ICN_LOCK + 1] = {0};
   std::vector<icn_t> icn_custom_;
 
   Fl_SVG_Image *icon(Row_t r) const override
@@ -80,11 +80,10 @@ private:
   }
 
 public:
-  filetable_extension(int X, int Y, int W, int H, const char *L=NULL) : filetable_(X,Y,W,H,L)
+  // c'tor
+  filetable_extension(int X, int Y, int W, int H, const char *L=NULL)
+  : filetable_(X,Y,W,H,L)
   {
-    for (size_t i=0; i < sizeof(icn_)/sizeof(*icn_); ++i) {
-      icn_[i] = NULL;
-    }
     svg_link_ = icn_[ICN_LINK];
     svg_noaccess_ = icn_[ICN_LOCK];
   }
