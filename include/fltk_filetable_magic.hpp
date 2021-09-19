@@ -42,8 +42,6 @@
 #include "fltk_filetable_.hpp"
 
 
-// TODO: use std::asynch?
-
 namespace fltk
 {
 
@@ -96,10 +94,13 @@ private:
 
   svg_t icn_[ICN_LAST] = {0};
   std::vector<ext_t> icn_custom_;
-  std::thread *th_ = nullptr;
+  std::thread *th_ = NULL;
   magic_t cookie_;
   bool use_magic_ = false;
   char *filter_mime_;
+
+  // set this true to stop the thread immediately
+  static bool request_stop_;
 
 #if DLOPEN_MAGIC != 0
   static void *handle_;
@@ -284,6 +285,14 @@ private:
   void update_icons()
   {
     for (int i=0; i < rows(); ++i) {
+      // stop immediately
+      if (request_stop_) {
+        request_stop_ = false;
+        Fl::unlock();
+        Fl::awake();
+        return;
+      }
+
       if (rowdata_.at(i).type == 'R') {
         rowdata_.at(i).svg = icon_magic(rowdata_.at(i));
         redraw_range(i, i, COL_NAME, COL_NAME);
@@ -338,7 +347,8 @@ public:
   virtual ~filetable_magic()
   {
     if (th_) {
-      th_->detach();
+      request_stop_ = true;
+      th_->join();
       delete th_;
     }
 
@@ -376,9 +386,11 @@ public:
     }
 
     if (th_) {
-      th_->detach();
+      request_stop_ = true;
+      th_->join();
       delete th_;
       th_ = NULL;
+      request_stop_ = false;
     }
 
     if (!filetable_::load_dir(dirname)) {
@@ -597,8 +609,10 @@ public:
   }
 };
 
-#if DLOPEN_MAGIC != 0
 // initializing static members
+bool filetable_magic::request_stop_ = false;
+
+#if DLOPEN_MAGIC != 0
 void *filetable_magic::handle_ = NULL;
 bool filetable_magic::symbols_loaded_ = false;
 

@@ -55,8 +55,6 @@
 
 // TODO:
 // * focus issues
-// * random crashes on selection when using fltk::filetable_magic
-
 
 
 namespace fltk
