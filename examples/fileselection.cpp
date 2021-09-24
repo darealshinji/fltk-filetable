@@ -35,6 +35,7 @@ int main()
   fltk::fileselection<fltk::filetable_magic> sel(4, 4, win.w() - 8, win.h() - 8);
   sel.set_dir("/home/djcj");  // set directory but don't load it
   sel.load_default_icons();
+  //sel.use_iec(false);
   //sel.show_hidden(true);
   //sel.sort_mode(sel.sort_mode() | fltk::filetable_::SORT_DIRECTORY_AS_FILE);
   sel.load_dir();

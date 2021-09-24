@@ -495,6 +495,9 @@ public:
 
   void sort_mode(uint u) {tree_->sort_mode(u); table_->sort_mode(u);}
   uint sort_mode() const {return table_->sort_mode();}
+
+  void use_iec(bool b) { table_->use_iec(b); }
+  bool use_iec() const { return table_->use_iec(); }
 };
 
 } // namespace fltk

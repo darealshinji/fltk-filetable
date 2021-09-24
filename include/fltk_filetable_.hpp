@@ -220,15 +220,29 @@ private:
     "Name", "Size", "Last modified"
   };
 
+  // use IEC units for filesizes (base 2) or not (base 10)
+  bool use_iec_ = true;
+
   // labels used for the file sizes
-  std::string filesize_label_[STR_SIZE_MAX] =
+  std::string filesize_label_[STR_SIZE_MAX][2] =
   {
-    FLTK_FMT_INT   " elements ",
-    FLTK_FMT_INT   " bytes ",
-    FLTK_FMT_FLOAT " KiB ",
-    FLTK_FMT_FLOAT " MiB ",
-    FLTK_FMT_FLOAT " GiB ",
-    FLTK_FMT_FLOAT " TiB "
+    { FLTK_FMT_INT   " elements ",
+      FLTK_FMT_INT   " elements " },
+
+    { FLTK_FMT_INT   " bytes ",
+      FLTK_FMT_INT   " bytes " },
+
+    { FLTK_FMT_FLOAT " kB ",
+      FLTK_FMT_FLOAT " kiB " },
+
+    { FLTK_FMT_FLOAT " MB ",
+      FLTK_FMT_FLOAT " MiB " },
+
+    { FLTK_FMT_FLOAT " GB ",
+      FLTK_FMT_FLOAT " GiB " },
+
+    { FLTK_FMT_FLOAT " TB ",
+      FLTK_FMT_FLOAT " TiB " }
   };
 
   // this string is used to be strdup()ed instead of being
@@ -618,49 +632,46 @@ protected:
   // return values must be free()d later
   char *human_readable_filesize(long bytes)
   {
-    const long s_kiB = 1024;
-    const long s_MiB = 1024 * s_kiB;
-    const long s_GiB = 1024 * s_MiB;
-    const long s_TiB = 1024 * s_GiB;
+    long sK, sM, sG, sT;
     long double ld = bytes;
     EStrSize idx = STR_SIZE_BYTES;
 
-    switch (bytes) {
-      // GiB
-      case s_GiB ... s_TiB-1:
-        idx = STR_SIZE_GBYTES;
-        ld /= s_GiB;
-        break;
-
-      // MiB
-      case s_MiB ... s_GiB-1:
-        idx = STR_SIZE_MBYTES;
-        ld /= s_MiB;
-        break;
-
-      // kiB
-      case s_kiB ... s_MiB-1:
-        idx = STR_SIZE_KBYTES;
-        ld /= s_kiB;
-        break;
-
-      // bytes
-      case 0 ... s_kiB-1:
-        return printf_alloc(filesize_label_[STR_SIZE_BYTES].c_str(), bytes);
-        break;
-
-      default:
-        // TiB
-        if (bytes >= s_TiB) {
-          idx = STR_SIZE_TBYTES;
-          ld /= s_TiB;
-        } else {
-          return printf_alloc(filesize_label_[STR_SIZE_BYTES].c_str(), bytes);
-        }
-        break;
+    if (use_iec_) {
+      sK = 1024;
+      sM = 1024 * sK;
+      sG = 1024 * sM;
+      sT = 1024 * sG;
+    } else {
+      sK = 1000;
+      sM = 1000 * sK;
+      sG = 1000 * sM;
+      sT = 1000 * sG;
     }
 
-    return printf_alloc(filesize_label_[idx].c_str(), ld);
+    if (bytes >= 0 && bytes < sK) {
+      // bytes
+      return printf_alloc(filesize_label_[STR_SIZE_BYTES][use_iec_].c_str(), bytes);
+    } else if (bytes >= sK && bytes < sM) {
+      // KB
+      idx = STR_SIZE_KBYTES;
+      ld /= sK;
+    } else if (bytes >= sM && bytes < sG) {
+      // MB
+      idx = STR_SIZE_MBYTES;
+      ld /= sM;
+    } else if (bytes >= sG && bytes < sT) {
+      // GB
+      idx = STR_SIZE_GBYTES;
+      ld /= sG;
+    } else if (bytes >= sT) {
+      // TB
+      idx = STR_SIZE_TBYTES;
+      ld /= sT;
+    } else {
+      return printf_alloc(filesize_label_[STR_SIZE_BYTES][use_iec_].c_str(), bytes);
+    }
+
+    return printf_alloc(filesize_label_[idx][use_iec_].c_str(), ld);
   }
 
   char *count_dir_entries(long &count, const char *directory)
@@ -708,7 +719,7 @@ protected:
       return strdup(str_unknown_elements_.c_str());
     }
 
-    return printf_alloc(filesize_label_[STR_SIZE_ELEMENTS].c_str(), count);
+    return printf_alloc(filesize_label_[STR_SIZE_ELEMENTS][use_iec_].c_str(), count);
   }
 
   // returns true if the current filename is accepted by the
@@ -1172,14 +1183,16 @@ public:
 
   void filesize_label(EStrSize idx, const char *l)
   {
+    if (empty(l)) return;
+
     switch (idx) {
       case STR_SIZE_ELEMENTS:
         str_unknown_elements_ = format_localization(l, "??");
       case STR_SIZE_BYTES:
-        filesize_label_[idx] = format_localization(l, FLTK_FMT_INT);
+        filesize_label_[idx][use_iec_] = format_localization(l, FLTK_FMT_INT);
         break;
       default:
-        filesize_label_[idx] = format_localization(l, FLTK_FMT_FLOAT);
+        filesize_label_[idx][use_iec_] = format_localization(l, FLTK_FMT_FLOAT);
         break;
     }
   }
@@ -1196,12 +1209,13 @@ public:
   void autowidth_max(int i) { autowidth_max_ = i; }
   void show_hidden(bool b) { show_hidden_ = b; }
   void sort_mode(uint u) { sort_mode_ = u; }
+  void use_iec(bool b) { use_iec_ = b; }
 
   // get
   const char *label_header(ECol idx) const { return label_header_[idx]; }
 
   const char *filesize_label(EStrSize idx) const {
-    return filesize_label_[idx].empty() ? NULL : filesize_label_[idx].c_str();
+    return filesize_label_[idx][use_iec_].empty() ? NULL : filesize_label_[idx][use_iec_].c_str();
   }
 
   int blend_w() const { return blend_w_; }
@@ -1209,6 +1223,7 @@ public:
   int autowidth_max() const { return autowidth_max_; }
   bool show_hidden() const { return show_hidden_; }
   uint sort_mode() const { return sort_mode_; }
+  bool use_iec() const { return use_iec_; }
 };
 
 bool filetable_::within_double_click_timelimit_ = false;
