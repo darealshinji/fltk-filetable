@@ -25,6 +25,10 @@
 #ifndef fltk_filetable_magic_hpp
 #define fltk_filetable_magic_hpp
 
+#ifndef FLTK_EXPERIMENTAL
+#error You need to define FLTK_EXPERIMENTAL
+#else
+
 #include <FL/Fl.H>
 #include <FL/Fl_SVG_Image.H>
 #include <string>
@@ -41,6 +45,9 @@
 
 #include "fltk_filetable_.hpp"
 
+
+// add second libmagic thread?
+// Bug: crashes on very fast directory switching
 
 namespace fltk
 {
@@ -287,7 +294,6 @@ private:
     for (int i=0; i < rows(); ++i) {
       // stop immediately
       if (request_stop_) {
-        request_stop_ = false;
         Fl::unlock();
         Fl::awake();
         return;
@@ -301,10 +307,12 @@ private:
       }
     }
 
+/*
     Fl::lock();
     redraw_range(0, rows()-1, COL_NAME, COL_NAME);
     Fl::unlock();
     Fl::awake();
+    */
   }
 
 public:
@@ -350,6 +358,8 @@ public:
       request_stop_ = true;
       th_->join();
       delete th_;
+      //th_ = NULL;
+      //request_stop_ = false;
     }
 
     for (int i = 0; i < ICN_LAST; ++i) {
@@ -625,6 +635,7 @@ filetable_magic::load_t filetable_magic::magic_load = NULL;
 
 } // namespace fltk
 
-#endif  // fltk_filetable_magic_hpp
+#endif  // FLTK_EXPERIMENTAL
 
+#endif  // fltk_filetable_magic_hpp
 

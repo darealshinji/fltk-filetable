@@ -42,8 +42,11 @@
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
 #include "fltk_filetable_extension.hpp"
-#include "fltk_filetable_magic.hpp"
 #include "xdg_dirs.hpp"
+
+#ifdef FLTK_EXPERIMENTAL
+#include "fltk_filetable_magic.hpp"
+#endif
 
 #ifndef FS_CALLBACK
 #define FS_CALLBACK(FUNC) \
