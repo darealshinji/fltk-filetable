@@ -484,6 +484,11 @@ protected:
     return true;
   }
 
+  // prevent opening directories on dragging
+  int handle(int e) {
+    return (e == FL_DRAG) ? 1 : Fl_Tree::handle(e);
+  }
+
 public:
   dirtree(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Tree(X, Y, W, H, L)
