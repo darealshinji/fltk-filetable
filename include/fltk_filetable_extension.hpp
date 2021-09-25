@@ -42,13 +42,14 @@ class filetable_extension : public filetable_
 private:
   typedef struct {
     std::vector<std::string> list;
+    const char *desc;
     Fl_SVG_Image *svg;
   } icn_t;
 
   Fl_SVG_Image *icn_[ICN_LOCK + 1] = {0};
   std::vector<icn_t> icn_custom_;
 
-  Fl_SVG_Image *icon(Row_t r) const override
+  Fl_SVG_Image *icon(Row_t &r) const override
   {
     if (r.isdir()) {
       return icn_[ICN_DIR];
@@ -71,6 +72,7 @@ private:
         }
 
         if (strcasecmp(r.cols[COL_NAME] + (len - ext.size()), ext.c_str()) == 0) {
+          r.cols[COL_TYPE] = const_cast<char *>(icn.desc);
           return icn.svg;
         }
       }
@@ -125,7 +127,7 @@ public:
   }
 
   // svg icon and list of file extensions separated by a delimiter and without dots
-  bool set_icon(const char *filename, const char *data, const char *list, const char *delim)
+  bool set_icon(const char *filename, const char *data, const char *description, const char *list, const char *delim)
   {
     std::vector<std::string> filter_list;
     char *tok;
@@ -163,6 +165,7 @@ public:
     icn_t icn;
     icn.list = filter_list;
     icn.svg = svg;
+    icn.desc = description;
     icn_custom_.push_back(icn);
 
     return true;

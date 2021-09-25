@@ -27,6 +27,7 @@
 #include <FL/Fl_Double_Window.H>
 #include <cassert>
 
+#define FLTK_EXPERIMENTAL 1
 #include "fltk_filetable_magic.hpp"
 
 
@@ -64,9 +65,8 @@ int main()
   table.labelsize(16);
   table.load_default_icons();
   //table.add_filter(".cpp");
-
-  //table.load_dir("/home/");
-  table.load_dir();
+  //table.show_mime(true);
+  table.load_dir("..");
 
   Fl_Button up(MARGIN, table.h() + MARGIN*2-10, 40, 36, "Up");
   up.callback(up_cb, &table);

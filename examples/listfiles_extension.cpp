@@ -75,11 +75,11 @@ int main()
     //table.add_filter_list(".zip|.tar|rar||", "|");
 
     table.load_default_icons();
-    table.set_icon(NULL, FILE_TEXT_SVG_DATA, txt, delim);
-    table.set_icon(NULL, FILE_IMAGE_3_SVG_DATA, imgs, delim);
-    table.set_icon(NULL, FILE_VIDEO_SVG_DATA, vid, delim);
-    table.set_icon(NULL, FILE_AUDIO_2_SVG_DATA, aud, delim);
-    table.set_icon(NULL, FILE_ARCHIVE_SVG_DATA, arch, delim);
+    table.set_icon(NULL, FILE_TEXT_SVG_DATA, "Text", txt, delim);
+    table.set_icon(NULL, FILE_IMAGE_3_SVG_DATA, "Image", imgs, delim);
+    table.set_icon(NULL, FILE_VIDEO_SVG_DATA, "Video", vid, delim);
+    table.set_icon(NULL, FILE_AUDIO_2_SVG_DATA, "Audio", aud, delim);
+    table.set_icon(NULL, FILE_ARCHIVE_SVG_DATA, "Archive", arch, delim);
 
     table.load_dir();
 

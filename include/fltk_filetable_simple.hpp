@@ -46,7 +46,7 @@ private:
 
   svg_t icn_[ICN_LAST] = {0};
 
-  Fl_SVG_Image *icon(Row_t r) const override
+  Fl_SVG_Image *icon(Row_t &r) const override
   {
     switch (r.type) {
       case 'D':

@@ -91,6 +91,7 @@ private:
 
   typedef struct {
     char *list;
+    const char *desc;
     Fl_SVG_Image *svg;
   } ext_t;
 
@@ -104,6 +105,7 @@ private:
   std::thread *th_ = NULL;
   magic_t cookie_;
   bool use_magic_ = false;
+  bool show_mime_ = false;
   char *filter_mime_;
 
   // set this true to stop the thread immediately
@@ -144,7 +146,7 @@ private:
   }
 #endif
 
-  Fl_SVG_Image *icon(Row_t r) const override
+  Fl_SVG_Image *icon(Row_t &r) const override
   {
     switch (r.type) {
       case 'D':
@@ -165,7 +167,7 @@ private:
     return icn_[ICN_FILE].svg;
   }
 
-  Fl_SVG_Image *icon_magic(Row_t r) const
+  Fl_SVG_Image *icon_magic(Row_t &r) const
   {
     const char *p;
 
@@ -186,6 +188,7 @@ private:
     if (!p) return icn_[ICN_FILE].svg;
 
     const char *type = NULL;
+    const char *mime = p;
 
 #define STR_BEGINS(ptr,str)  (strncmp(ptr, str, sizeof(str)-1) == 0)
 
@@ -207,6 +210,12 @@ private:
 
           for (const auto l : icn_custom_) {
             if (strstr(l.list, p) || strstr(l.list, s.c_str())) {
+              if (show_mime()) {
+                r.cols[COL_TYPE] = strdup(mime);
+                r.type = ENTRY_ALLOCATED;
+              } else {
+                r.cols[COL_TYPE] = const_cast<char *>(l.desc);
+              }
               return l.svg;
             }
           }
@@ -257,8 +266,11 @@ private:
 
       default:
         // unsupported type or message like "regular file"
+        if (show_mime()) {
+          r.cols[COL_TYPE] = strdup(mime);
+          r.type = ENTRY_ALLOCATED;
+        }
         return icn_[ICN_FILE].svg;
-        break;
     }
 
 #undef STR_BEGINS
@@ -272,6 +284,12 @@ private:
 
     for (const auto l : icn_custom_) {
       if (strstr(l.list, s.c_str())) {
+        if (show_mime()) {
+          r.cols[COL_TYPE] = strdup(mime);
+          r.type = ENTRY_ALLOCATED;
+        } else {
+          r.cols[COL_TYPE] = const_cast<char *>(l.desc);
+        }
         return l.svg;
       }
     }
@@ -280,11 +298,21 @@ private:
     if (type) {
       for (const auto l : icn_custom_) {
         if (strstr(l.list, type)) {
+          if (show_mime()) {
+            r.cols[COL_TYPE] = strdup(mime);
+            r.type = ENTRY_ALLOCATED;
+          } else {
+            r.cols[COL_TYPE] = const_cast<char *>(l.desc);
+          }
           return l.svg;
         }
       }
     }
 
+    if (show_mime()) {
+      r.cols[COL_TYPE] = strdup(mime);
+      r.type = ENTRY_ALLOCATED;
+    }
     return icn_[ICN_FILE].svg;
   }
 
@@ -299,7 +327,7 @@ private:
         return;
       }
 
-      if (rowdata_.at(i).type == 'R') {
+      if (rowdata_.at(i).type == 'R' || (show_mime() && rowdata_.at(i).type != 'D')) {
         rowdata_.at(i).svg = icon_magic(rowdata_.at(i));
         redraw_range(i, i, COL_NAME, COL_NAME);
         parent()->redraw();
@@ -480,7 +508,7 @@ public:
   }
 
   // set list of MIME types, semicolon-separated
-  bool set_icon(const char *filename, const char *data, const char *list)
+  bool set_icon(const char *filename, const char *data, const char *description, const char *list)
   {
     if ((empty(filename) && empty(data)) || empty(list)) {
       return false;
@@ -535,6 +563,7 @@ public:
     svg->resize(labelsize() + 4, labelsize() + 4);
 
     ext_t ext;
+    ext.desc = description;
     ext.list = reinterpret_cast<char *>(realloc(buf, strlen(buf)));
     ext.svg = svg;
 
@@ -607,16 +636,20 @@ public:
     icn_custom_.clear();
     icn_custom_.reserve(8);
 
-    set_icon(NULL, FILE_TEXT_SVG_DATA, ";text;");
-    set_icon(NULL, FILE_IMAGE_3_SVG_DATA, ";image;");
-    set_icon(NULL, FILE_VIDEO_SVG_DATA, ";video;");
-    set_icon(NULL, FILE_AUDIO_2_SVG_DATA, ";audio;");
-    set_icon(NULL, FILE_FONT_SVG_DATA, ";font;");
-    set_icon(NULL, FILE_PDF_SVG_DATA, ";application/x-pdf;");
-    set_icon(NULL, APP_GENERIC_SVG_DATA, ";application/x-sharedlib;application/x-executable;");
-    set_icon(NULL, FILE_ARCHIVE_SVG_DATA, archive_mime);
+    set_icon(NULL, FILE_TEXT_SVG_DATA, "Text", ";text;");
+    set_icon(NULL, FILE_IMAGE_3_SVG_DATA, "Image", ";image;");
+    set_icon(NULL, FILE_VIDEO_SVG_DATA, "Video", ";video;");
+    set_icon(NULL, FILE_AUDIO_2_SVG_DATA, "Audio", ";audio;");
+    set_icon(NULL, FILE_FONT_SVG_DATA, "Font", ";font;");
+    set_icon(NULL, FILE_PDF_SVG_DATA, "Portable Document Format", ";application/x-pdf;");
+    set_icon(NULL, APP_GENERIC_SVG_DATA, "Executable / shared library", ";application/x-sharedlib;application/x-executable;");
+    set_icon(NULL, FILE_ARCHIVE_SVG_DATA, "Archive", archive_mime);
 #endif  // SVG_DATA_H
   }
+
+  // show MIME type or custom description
+  void show_mime(bool b) { show_mime_ = b; }
+  bool show_mime() const { return show_mime_; }
 };
 
 // initializing static members

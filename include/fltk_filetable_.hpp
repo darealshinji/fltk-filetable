@@ -65,6 +65,7 @@ public:
   enum ECol {
     COL_NAME = 0,  // Name
     COL_SIZE,      // Size
+    COL_TYPE,      // Type
     COL_LAST_MOD,  // Last modified
     COL_MAX
   };
@@ -89,6 +90,10 @@ public:
   };
 
 protected:
+  enum {
+    ENTRY_ALLOCATED = 'x'
+  };
+
   enum EIcn {
     ICN_DIR = 0,  // directory
     ICN_FILE,     // regular file
@@ -217,7 +222,7 @@ private:
 
   // labels of the header entries
   const char *label_header_[COL_MAX] = {
-    "Name", "Size", "Last modified"
+    "Name", "Size", "Type", "Last modified"
   };
 
   // use IEC units for filesizes (base 2) or not (base 10)
@@ -611,7 +616,7 @@ protected:
   }
 
   // return pointer to icon set for row entry
-  virtual Fl_SVG_Image *icon(Row_t) const = 0;
+  virtual Fl_SVG_Image *icon(Row_t&) const = 0;
 
   // similar to printf() but returns an allocated string
   static char *printf_alloc(const char *fmt, ...)
@@ -831,7 +836,9 @@ public:
     // clear rowdata_ and free entries
     for (const auto e : rowdata_) {
       for (int i = 0; i < COL_MAX; ++i) {
-        if (e.cols[i]) free(e.cols[i]);
+        if (e.cols[i] && (i != COL_TYPE || e.type == ENTRY_ALLOCATED)) {
+          free(e.cols[i]);
+        }
       }
     }
 
@@ -1009,6 +1016,7 @@ public:
         if (S_ISDIR(st.st_mode)) {
           row.type = 'D';
           row.cols[COL_SIZE] = count_dir_entries(row.bytes, dir->d_name);
+          row.cols[COL_TYPE] = const_cast<char *>("Directory");
         } else {
           // check for file extensions
           if (!filter_show_entry(dir->d_name)) continue;
@@ -1020,22 +1028,27 @@ public:
             case S_IFBLK:
               // block device
               row.type = 'B';
+              row.cols[COL_TYPE] = const_cast<char *>("Block device");
               break;
             case S_IFCHR:
               // character device
               row.type = 'C';
+              row.cols[COL_TYPE] = const_cast<char *>("Character device");
               break;
             case S_IFIFO:
               // FIFO/pipe
               row.type = 'F';
+              row.cols[COL_TYPE] = const_cast<char *>("Pipe");
               break;
             case S_IFSOCK:
               // socket
               row.type = 'S';
+              row.cols[COL_TYPE] = const_cast<char *>("Socket");
               break;
             default:
               // regular file or dead link
               row.type = 'R';
+              row.cols[COL_TYPE] = const_cast<char *>("File");
               break;
           }
         }
