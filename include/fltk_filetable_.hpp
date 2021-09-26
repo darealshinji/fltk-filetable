@@ -254,16 +254,15 @@ private:
   // created with printf_alloc() each time
   std::string str_unknown_elements_ = "?? elements ";
 
+  // whether to check for icons when draw() is called
+  bool check_icons_ = true;
 
   // extra width for icons
-  inline int col_name_extra_w() const {
-    return labelsize() + 10;
-  }
+  int col_name_extra_w_ = 2;
 
   // callback for table events
   void event_callback()
   {
-    //int row = callback_row();  // unused
     int col = callback_col();
 
     if (callback_context() == CONTEXT_COL_HEADER) {
@@ -279,10 +278,7 @@ private:
         last_row_sorted_ = col;
       }
       last_row_clicked_ = -1;
-      return;
     }
-
-    //last_row_clicked_ = row;
   }
 
   static bool within_double_click_timelimit_;
@@ -412,6 +408,31 @@ protected:
     return NULL;
   }
 
+  // after initially calling Fl_Table_Row::draw() we
+  // need to check rowdata_ for icons and call it again
+  // to update the cells if any icons were found;
+  // this should be done whenever load_dir() was called,
+  // so make sure to set "check_icons_ = true" when you
+  // clear the current table
+  void draw()
+  {
+    Fl_Table_Row::draw();
+
+    if (!check_icons_) return;
+    //printf("looking for icons\n");
+
+    check_icons_ = false;
+    col_name_extra_w_ = 2;
+
+    for (const auto &e : rowdata_) {
+      if (e.svg) {
+        col_name_extra_w_ = labelsize() + 10;
+        Fl_Table_Row::draw();
+        return;
+      }
+    }
+  }
+
   // Handle drawing all cells in table
   void draw_cell(TableContext context, int R=0, int C=0, int X=0, int Y=0, int W=0, int H=0)
   {
@@ -485,8 +506,8 @@ protected:
               svg_noaccess_->draw(X + 2, Y + 2);
             }
 
-            X += col_name_extra_w();
-            fw += col_name_extra_w();
+            X += col_name_extra_w_;
+            fw += col_name_extra_w_;
           }
 
           // Text
@@ -499,7 +520,7 @@ protected:
             if (blend_h() != H) blend_h(H);
 
             if (blend && fw + blend_h() > W) {
-              blend->draw(X + W - col_name_extra_w() - blend_w(), Y);
+              blend->draw(X + W - col_name_extra_w_ - blend_w(), Y);
             }
           }
         }
@@ -763,7 +784,7 @@ protected:
 
     for (int c = 0; c < COL_MAX; ++c) {
       // consider extra space for icons
-      int extra = (c == COL_NAME) ? col_name_extra_w() : 0;
+      int extra = (c == COL_NAME) ? col_name_extra_w_ : 0;
 
       // header
       w = h = 0;
@@ -807,8 +828,8 @@ public:
 
     col_header(1);
     col_resize(1);
-    col_resize_min(col_name_extra_w() + blend_w());
-    autowidth_max(W - col_name_extra_w());
+    col_resize_min(col_name_extra_w_ + blend_w());
+    autowidth_max(W - col_name_extra_w_);
     type(SELECT_SINGLE);
 
     when(FL_WHEN_RELEASE);
@@ -829,8 +850,6 @@ public:
 
   void clear()
   {
-    last_row_clicked_ = -1;
-
     Fl_Table_Row::clear();
 
     // clear rowdata_ and free entries
@@ -843,6 +862,9 @@ public:
     }
 
     rowdata_.clear();
+
+    last_row_clicked_ = -1;
+    check_icons_ = true;
   }
 
   // resolve '.' and '..' but don't follow symlinks;
@@ -942,6 +964,7 @@ public:
       return false;
     }
 
+    // open() directory
     { std::string new_dir;
 
       if (empty(dirname)) {
@@ -1214,7 +1237,7 @@ public:
   {
     if (i == blend_w_) return;
     blend_w_ = i;
-    col_resize_min(col_name_extra_w() + blend_w());
+    col_resize_min(col_name_extra_w_ + blend_w());
     update_overlays();
   }
 
