@@ -192,10 +192,6 @@ private:
   }
 
 protected:
-  inline bool empty(const char *val) {
-    return (!val || *val == 0) ? true : false;
-  }
-
   // blend/overlay up to 3 Fl_RGB_Image* images in RGBA format
   static Fl_RGB_Image *blend_rgba(Fl_RGB_Image *inBg, Fl_RGB_Image *inFg, Fl_RGB_Image *inFg2=NULL)
   {
@@ -552,7 +548,7 @@ public:
   // load a directory from a given path
   bool load_dir(const char *inPath)
   {
-    if (empty(inPath)) {
+    if (filetable_::empty(inPath)) {
       return false;
     }
 

@@ -38,6 +38,7 @@
 #include <string>
 #include <vector>
 #include <string.h>
+//#include <assert.h>
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
@@ -103,10 +104,6 @@ private:
     filetable_sub(int X, int Y, int W, int H, fileselection *fs) : T(X,Y,W,H,NULL) {
       fs_ptr = fs;
     }
-
-    void set_dir(const char *dirname) {
-      if (dirname) T::open_directory_ = dirname;
-    }
   };
 
   class addressline : public Fl_Input
@@ -165,14 +162,11 @@ private:
     }
   };
 
-  typedef struct {
-    fileselection *obj;
-    std::string path;
-  } cb_data;
-
-  cb_data data_[xdg::LAST + 1]; // XDG dirs + $HOME
-  std::string selection_;
+  std::string data_[xdg::LAST + 1]; // XDG dirs + $HOME
   uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
+  int history_max_entries_ = 10;
+
+  std::string selection_, prev_, load_dir_;
 
   dirtree *tree_;
   filetable_sub *table_;
@@ -180,7 +174,7 @@ private:
 
   Fl_Group *g_top, *g_bot;
   Fl_Tile *g_main;
-  Fl_Menu_Button *b_places;
+  Fl_Menu_Button *b_places, *b_history;
   Fl_Button *b_up, *b_reload, *b_cancel;
   Fl_Return_Button *b_ok;
   Fl_Toggle_Button *b_hidden;
@@ -229,16 +223,56 @@ protected:
   }
 
   // load currently open directory in tree_
+  // or load the directory that was set with set_dir()
+  // in tree_ and table_
   bool load_open_directory()
   {
-    const char *dir = table_->open_directory();
+    // a directory was set with set_dir()
+    if (!load_dir_.empty()) {
+      // will set open_directory_ on success
+      bool rv = table_->load_dir(load_dir_.c_str());
+      load_dir_.clear();
 
+      if (!rv) {
+        addr_->value(NULL);
+        tree_->close_root();
+        return false;
+      }
+    }
+
+    const char *dir = table_->open_directory();
     addr_->value(dir);
     tree_->close_root();
+
     if (!dir) return false;
 
     bool rv = tree_->load_dir(dir);
     if (rv) tree_->calc_tree();
+
+    // add previous directory to the history list
+    if (!prev_.empty() && prev_.compare(dir) != 0) {
+      if (!b_history->active()) b_history->activate();
+
+      // delete duplicates and current directory
+      int idx = b_history->find_index(prev_.c_str());
+      if (idx != -1) b_history->remove(idx);
+      idx = b_history->find_index(dir);
+      if (idx != -1) b_history->remove(idx);
+
+      // maximum of 10 entries
+      for (int i = b_history->size() - 1; i > history_max_entries_ - 1; --i) {
+        b_history->remove(i - 1);
+      }
+
+      // insert new top entry
+      b_history->insert(0, prev_.c_str(), 0, places_cb);
+      Fl_Menu_Item *m = const_cast<Fl_Menu_Item *>(b_history->menu());
+
+      // shift user_data_ pointers
+      for (int i = 0; i < m->size() - 1; ++i) {
+        m[i].user_data_ = const_cast<char *>(m[i].text);
+      }
+    }
 
     if (table_->open_directory_is_root()) {
       b_up->deactivate();
@@ -289,15 +323,19 @@ protected:
     refresh();
   }
 
-  static void places_cb(Fl_Widget *, void *v) {
-    cb_data *dat = reinterpret_cast<cb_data *>(v);
-    dat->obj->load_dir(dat->path.c_str());
+  static void places_cb(Fl_Widget *o, void *v)
+  {
+    if (!v || !o) return;
+    //assert(dynamic_cast<fileselection *>(o->parent()->parent()));
+    fileselection *fs = dynamic_cast<fileselection *>(o->parent()->parent());
+    if (fs) fs->load_dir(reinterpret_cast<const char *>(v));
   }
 
   int handle(int event)
   {
     if (event == FL_NO_EVENT) return 1;
 
+    // OK button activation
     if (table_->selected()) {
       b_ok->activate();
     } else {
@@ -328,16 +366,19 @@ public:
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
       b_places->add("\\/", 0, FS_CALLBACK( load_dir("/") ), this);
 
-      b_up = new Fl_Button(X + 72, but_y, but_h, but_h, "@+78->");
+      b_up = new Fl_Button(b_places->x() + b_places->w(), but_y, but_h, but_h, "@+78->");
       b_up->callback(FS_CALLBACK( dir_up() ), this);
 
-      b_reload = new Fl_Button(b_up->x() + but_h, but_y, but_h, but_h, "@+4reload");
+      b_reload = new Fl_Button(b_up->x() + b_up->w(), but_y, but_h, but_h, "@+4reload");
       b_reload->callback(FS_CALLBACK( refresh() ), this);
 
-      b_hidden = new Fl_Toggle_Button(b_reload->x() + but_h, but_y, 60, but_h, "Hidden\nfiles");
+      b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w(), but_y, 60, but_h, "Show\nhidden");
       b_hidden->callback(FS_CALLBACK( toggle_hidden() ), this);
 
-      g_top_dummy = new Fl_Box(b_hidden->x() + b_hidden->w(), but_y, 1, 1);
+      b_history = new Fl_Menu_Button(b_hidden->x() + b_hidden->w(), but_y, 72, but_h, "History");
+      b_history->deactivate();
+
+      g_top_dummy = new Fl_Box(b_history->x() + b_history->w(), but_y, 1, 1);
     }
     g_top->end();
     g_top->resizable(g_top_dummy);
@@ -382,15 +423,16 @@ public:
 
     // $HOME
     if (rv != -1) {
-      data_[0] = { this, xdg.home() };
-      b_places->add("Home", 0, places_cb, static_cast<void *>(&data_[0]));
+      //data_[0] = { this, xdg.home() };
+      data_[0] = xdg.home();
+      b_places->add("Home", 0, places_cb, const_cast<char *>(data_[0].c_str()));
     }
 
     if (rv > 0) {
       // XDG_DESKTOP_DIR
       if (xdg.dir(xdg::DESKTOP) && xdg.basename(xdg::DESKTOP)) {
-        data_[1] = { this, xdg.dir(xdg::DESKTOP) };
-        b_places->add(xdg.basename(xdg::DESKTOP), 0, places_cb, static_cast<void *>(&data_[1]));
+        data_[1] = xdg.dir(xdg::DESKTOP);
+        b_places->add(xdg.basename(xdg::DESKTOP), 0, places_cb, const_cast<char *>(data_[1].c_str()));
       }
 
       // add remaining XDG directories
@@ -413,8 +455,8 @@ public:
         int i = 2;
 
         for (const int j : xdg_vec_) {
-          data_[i] = { this, xdg.dir(j) };
-          b_places->add(xdg.basename(j), 0, places_cb, static_cast<void *>(&data_[i]));
+          data_[i] = xdg.dir(j);
+          b_places->add(xdg.basename(j), 0, places_cb, const_cast<char *>(data_[i].c_str()));
           i++;
         }
       }
@@ -432,24 +474,54 @@ public:
 
   // set directory without loading it; use refresh() to load it
   void set_dir(const char *dirname) {
-    table_->set_dir(dirname);
+    load_dir_.clear();
+    if (!T::empty(dirname)) load_dir_ = dirname;
   }
 
   // calls load_dir() on table_ and tree_
-  bool load_dir(const char *dirname) {
+  bool load_dir(const char *dirname)
+  {
+    std::string s;
+
+    if (table_->open_directory()) {
+      s = table_->open_directory();
+    }
+
     if (!table_->load_dir(dirname)) return false;
+    prev_ = s;
+
     return load_open_directory();
   }
 
   // move directory up (table_ and tree_)
-  bool dir_up() {
+  bool dir_up()
+  {
+    std::string s;
+
+    if (table_->open_directory()) {
+      s = table_->open_directory();
+    }
+
     if (!table_->dir_up()) move_up_tree();
+    prev_ = s;
+
     return load_open_directory();
   }
 
   // reload directory
-  bool refresh() {
-    if (!table_->refresh()) move_up_tree();
+  bool refresh()
+  {
+    std::string s;
+
+    if (table_->open_directory()) {
+      s = table_->open_directory();
+    }
+
+    if (!table_->refresh()) {
+      move_up_tree();
+      prev_ = s;
+    }
+
     return load_open_directory();
   }
 

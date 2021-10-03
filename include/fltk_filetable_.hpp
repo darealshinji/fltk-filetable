@@ -303,11 +303,6 @@ protected:
   Fl_SVG_Image *svg_link_ = NULL;
   Fl_SVG_Image *svg_noaccess_ = NULL;
 
-  // check if const char * is empty
-  inline bool empty(const char *val) {
-    return (!val || *val == 0) ? true : false;
-  }
-
   // create an overlay image, transitioning from the left being full
   // transparent to the right being full opaque
   Fl_RGB_Image *make_overlay_image(uchar r, uchar g, uchar b, int W, int H)
@@ -865,6 +860,11 @@ public:
 
     last_row_clicked_ = -1;
     check_icons_ = true;
+  }
+
+  // check if const char * is empty
+  inline static bool empty(const char *val) {
+    return (!val || *val == 0) ? true : false;
   }
 
   // resolve '.' and '..' but don't follow symlinks;
