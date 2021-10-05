@@ -167,6 +167,7 @@ private:
   int history_max_entries_ = 10;
 
   std::string selection_, prev_, load_dir_;
+  const char *label_back_ = "@<|", *label_forth_ = "@|>";
 
   dirtree *tree_;
   filetable_sub *table_;
@@ -175,7 +176,7 @@ private:
   Fl_Group *g_top, *g_bot;
   Fl_Tile *g_main;
   Fl_Menu_Button *b_places, *b_history;
-  Fl_Button *b_up, *b_reload, *b_cancel;
+  Fl_Button *b_up, *b_reload, *b_cancel, *b_back;
   Fl_Return_Button *b_ok;
   Fl_Toggle_Button *b_hidden;
   Fl_Box *g_top_dummy, *g_bot_dummy;
@@ -227,6 +228,8 @@ protected:
   // in tree_ and table_
   bool load_open_directory()
   {
+    b_back->label(label_back_);
+
     // a directory was set with set_dir()
     if (!load_dir_.empty()) {
       // will set open_directory_ on success
@@ -251,27 +254,32 @@ protected:
 
     // add previous directory to the history list
     if (!prev_.empty() && prev_.compare(dir) != 0) {
-      if (!b_history->active()) b_history->activate();
+      b_back->activate();
+      b_history->activate();
+
+      Fl_Menu_Item *m = const_cast<Fl_Menu_Item *>(b_history->menu());
 
       // delete duplicates and current directory
-      int idx = b_history->find_index(prev_.c_str());
-      if (idx != -1) b_history->remove(idx);
-      idx = b_history->find_index(dir);
-      if (idx != -1) b_history->remove(idx);
+      for (int i = 0; i < b_history->size(); ++i) {
+        void *data = m[i].user_data();
+        const char *p = reinterpret_cast<const char *>(data);
+
+        if (data && (prev_.compare(p) == 0|| strcmp(dir, p) == 0)) {
+          free(data);
+          b_history->remove(i);
+        }
+      }
 
       // maximum of 10 entries
       for (int i = b_history->size() - 1; i > history_max_entries_ - 1; --i) {
+        void *data = m[i - 1].user_data();
+        if (data) free(data);
         b_history->remove(i - 1);
       }
 
       // insert new top entry
-      b_history->insert(0, prev_.c_str(), 0, places_cb);
-      Fl_Menu_Item *m = const_cast<Fl_Menu_Item *>(b_history->menu());
-
-      // shift user_data_ pointers
-      for (int i = 0; i < m->size() - 1; ++i) {
-        m[i].user_data_ = const_cast<char *>(m[i].text);
-      }
+      b_history->insert(0, prev_ == "/" ? "/" : basename(prev_.c_str()), 0, places_cb, strdup(prev_.c_str()));
+      m = const_cast<Fl_Menu_Item *>(b_history->menu());
     }
 
     if (table_->open_directory_is_root()) {
@@ -375,7 +383,11 @@ public:
       b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w(), but_y, 60, but_h, "Show\nhidden");
       b_hidden->callback(FS_CALLBACK( toggle_hidden() ), this);
 
-      b_history = new Fl_Menu_Button(b_hidden->x() + b_hidden->w(), but_y, 72, but_h, "History");
+      b_back = new Fl_Button(b_hidden->x() + b_hidden->w(), but_y, but_h, but_h, label_back_);
+      b_back->callback(FS_CALLBACK( back() ), this);
+      b_back->deactivate();
+
+      b_history = new Fl_Menu_Button(b_back->x() + b_back->w(), but_y, 21, but_h);
       b_history->deactivate();
 
       g_top_dummy = new Fl_Box(b_history->x() + b_history->w(), but_y, 1, 1);
@@ -467,7 +479,17 @@ public:
   }
 
   // d'tor
-  virtual ~fileselection() {
+  virtual ~fileselection()
+  {
+    Fl_Menu_Item *m = const_cast<Fl_Menu_Item *>(b_history->menu());
+
+    // free() user data
+    for (int i = 0; i < b_history->size(); ++i) {
+      void *data = m[i].user_data();
+      //if (data) printf("delete: %s\n", (const char *)data);
+      if (data) free(data);
+    }
+
     if (tree_) delete tree_;
     if (table_) delete table_;
   }
@@ -508,6 +530,20 @@ public:
     return load_open_directory();
   }
 
+  void back()
+  {
+    const char *l = b_back->label();
+    const Fl_Menu_Item *m = b_history->menu();
+
+    load_dir(reinterpret_cast<const char *>(m[0].user_data()));
+
+    if (strcmp(l, label_back_) == 0) {
+      b_back->label(label_forth_);
+    } else {
+      b_back->label(label_back_);
+    }
+  }
+
   // reload directory
   bool refresh()
   {
@@ -522,7 +558,11 @@ public:
       prev_ = s;
     }
 
-    return load_open_directory();
+    const char *l = b_back->label();
+    bool rv = load_open_directory();
+
+    b_back->label(l);
+    return rv;
   }
 
   // alternative to refresh()
