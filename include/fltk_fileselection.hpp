@@ -164,9 +164,17 @@ private:
 
   std::string data_[xdg::LAST + 1]; // XDG dirs + $HOME
   uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
-  int history_max_entries_ = 10;
 
-  std::string selection_, prev_, load_dir_;
+  enum { HISTORY_MAX = 10 };
+  Fl_Menu_Item mprev_[HISTORY_MAX + 1] = {0};
+
+  typedef struct {
+    std::string base;
+    std::string path;
+  } path_t;
+  std::vector<path_t> vprev_;
+
+  std::string selection_, load_dir_, prev_;
   const char *label_back_ = "@<|", *label_forth_ = "@|>";
 
   dirtree *tree_;
@@ -228,6 +236,7 @@ protected:
   // in tree_ and table_
   bool load_open_directory()
   {
+    // reset label
     b_back->label(label_back_);
 
     // a directory was set with set_dir()
@@ -249,38 +258,9 @@ protected:
 
     if (!dir) return false;
 
+    // update tree_
     bool rv = tree_->load_dir(dir);
     if (rv) tree_->calc_tree();
-
-    // add previous directory to the history list
-    if (!prev_.empty() && prev_.compare(dir) != 0) {
-      b_back->activate();
-      b_history->activate();
-
-      Fl_Menu_Item *m = const_cast<Fl_Menu_Item *>(b_history->menu());
-
-      // delete duplicates and current directory
-      for (int i = 0; i < b_history->size(); ++i) {
-        void *data = m[i].user_data();
-        const char *p = reinterpret_cast<const char *>(data);
-
-        if (data && (prev_.compare(p) == 0|| strcmp(dir, p) == 0)) {
-          free(data);
-          b_history->remove(i);
-        }
-      }
-
-      // maximum of 10 entries
-      for (int i = b_history->size() - 1; i > history_max_entries_ - 1; --i) {
-        void *data = m[i - 1].user_data();
-        if (data) free(data);
-        b_history->remove(i - 1);
-      }
-
-      // insert new top entry
-      b_history->insert(0, prev_ == "/" ? "/" : basename(prev_.c_str()), 0, places_cb, strdup(prev_.c_str()));
-      m = const_cast<Fl_Menu_Item *>(b_history->menu());
-    }
 
     if (table_->open_directory_is_root()) {
       b_up->deactivate();
@@ -295,6 +275,50 @@ protected:
         tree_->show_item(item);
         tree_->set_item_focus(item);
       }
+    }
+
+    if (prev_.empty() || prev_.compare(dir) == 0) return rv;
+
+    // add previous directory to the history list
+
+    b_back->activate();
+    b_history->activate();
+
+    // delete duplicates and current directory
+    auto it = vprev_.begin();
+    for ( ; it != vprev_.end(); ++it) {
+      const path_t &p = *it;
+
+      if (p.path == prev_ || p.path.compare(dir) == 0) {
+        vprev_.erase(it);
+        it--;
+      }
+    }
+
+    // keep list at a maximum size
+    while (vprev_.size() >= HISTORY_MAX) {
+      vprev_.pop_back();
+    }
+
+    // add new entry to vector
+    path_t entry;
+    const char *base = basename(prev_.c_str());
+    entry.base = T::empty(base) ? prev_ : base;
+    entry.path = prev_;
+    vprev_.insert(vprev_.begin(), entry);
+
+    // clear old menu
+    int i=0;
+    for ( ; i <= HISTORY_MAX; ++i) {
+      mprev_[i] = {0};
+    }
+
+    // update menu
+    for (i=0, it=vprev_.begin(); it != vprev_.end(); ++i, ++it) {
+      const path_t &p = *it;
+      mprev_[i].text = p.base.c_str();
+      mprev_[i].user_data_ = const_cast<char *>(p.path.c_str());
+      mprev_[i].callback_ = places_cb;
     }
 
     return rv;
@@ -388,6 +412,7 @@ public:
       b_back->deactivate();
 
       b_history = new Fl_Menu_Button(b_back->x() + b_back->w(), but_y, 21, but_h);
+      b_history->menu(reinterpret_cast<const Fl_Menu_Item *>(&mprev_));
       b_history->deactivate();
 
       g_top_dummy = new Fl_Box(b_history->x() + b_history->w(), but_y, 1, 1);
@@ -479,17 +504,7 @@ public:
   }
 
   // d'tor
-  virtual ~fileselection()
-  {
-    Fl_Menu_Item *m = const_cast<Fl_Menu_Item *>(b_history->menu());
-
-    // free() user data
-    for (int i = 0; i < b_history->size(); ++i) {
-      void *data = m[i].user_data();
-      //if (data) printf("delete: %s\n", (const char *)data);
-      if (data) free(data);
-    }
-
+  virtual ~fileselection() {
     if (tree_) delete tree_;
     if (table_) delete table_;
   }
@@ -533,9 +548,8 @@ public:
   void back()
   {
     const char *l = b_back->label();
-    const Fl_Menu_Item *m = b_history->menu();
 
-    load_dir(reinterpret_cast<const char *>(m[0].user_data()));
+    load_dir(reinterpret_cast<const char *>(mprev_[0].user_data()));
 
     if (strcmp(l, label_back_) == 0) {
       b_back->label(label_forth_);
