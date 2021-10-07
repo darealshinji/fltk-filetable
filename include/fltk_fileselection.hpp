@@ -52,7 +52,7 @@
 #ifndef FS_CALLBACK
 #define FS_CALLBACK(FUNC) \
   static_cast<void(*)(Fl_Widget*, void*)>(\
-    [](Fl_Widget*, void *v) { reinterpret_cast<fileselection *>(v)->FUNC; }\
+    [](Fl_Widget*, void *v) { reinterpret_cast<decltype(this)>(v)->FUNC; }\
   )
 #endif
 
@@ -174,7 +174,7 @@ private:
   } path_t;
   std::vector<path_t> vprev_;
 
-  std::string selection_, load_dir_, prev_;
+  std::string selection_, load_dir_;
   const char *label_back_ = "@<|", *label_forth_ = "@|>";
 
   dirtree *tree_;
@@ -199,7 +199,7 @@ protected:
       window()->hide();
     } else if (table_->last_clicked_item_isdir()) {
       // double click on directory -> load directory
-      load_dir(table_->last_clicked_item().c_str());
+      load_dir(table_->last_clicked_item());
     } else {
       // set selection and quit
       selection_ = table_->last_clicked_item();
@@ -229,6 +229,17 @@ protected:
       default:
         break;
     }
+  }
+
+  // add entry to history
+  void add_to_history(const std::string &path)
+  {
+    if (path.empty()) return;
+    path_t entry;
+    const char *base = basename(path.c_str());
+    entry.base = T::empty(base) ? path : base;
+    entry.path = path;
+    vprev_.insert(vprev_.begin(), entry);
   }
 
   // load currently open directory in tree_
@@ -277,38 +288,36 @@ protected:
       }
     }
 
-    if (prev_.empty() || prev_.compare(dir) == 0) return rv;
+    if (vprev_.size() == 0 || vprev_.at(0).path.compare(dir) == 0) {
+      return rv;
+    }
 
     // add previous directory to the history list
 
     b_back->activate();
     b_history->activate();
 
-    // delete duplicates and current directory
     auto it = vprev_.begin();
-    for ( ; it != vprev_.end(); ++it) {
+    const path_t &pprev = *it;
+    const std::string &prev = pprev.path;
+
+    // delete duplicates and current directory
+    for (it++; it != vprev_.end(); ++it) {
       const path_t &p = *it;
 
-      if (p.path == prev_ || p.path.compare(dir) == 0) {
+      if (p.path == prev || p.path.compare(dir) == 0) {
         vprev_.erase(it);
         it--;
       }
     }
 
     // keep list at a maximum size
-    while (vprev_.size() >= HISTORY_MAX) {
+    while (vprev_.size() >= HISTORY_MAX+1) {
       vprev_.pop_back();
     }
 
-    // add new entry to vector
-    path_t entry;
-    const char *base = basename(prev_.c_str());
-    entry.base = T::empty(base) ? prev_ : base;
-    entry.path = prev_;
-    vprev_.insert(vprev_.begin(), entry);
-
     // clear old menu
-    int i=0;
+    int i = 0;
     for ( ; i <= HISTORY_MAX; ++i) {
       mprev_[i] = {0};
     }
@@ -383,6 +392,8 @@ public:
   fileselection(int X, int Y, int W, int H, int spacing=4)
   : Fl_Group(X,Y,W,H, NULL)
   {
+    vprev_.reserve(HISTORY_MAX + 1);
+
     if (spacing < 0) spacing = 0;
     if (spacing > 24) spacing = 24;
 
@@ -396,7 +407,6 @@ public:
       const int but_y = addr_->y() + addr_->h() + spacing;
 
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
-      b_places->add("\\/", 0, FS_CALLBACK( load_dir("/") ), this);
 
       b_up = new Fl_Button(b_places->x() + b_places->w(), but_y, but_h, but_h, "@+78->");
       b_up->callback(FS_CALLBACK( dir_up() ), this);
@@ -455,6 +465,9 @@ public:
 
 
     // create "places" menu entries
+
+    b_places->add("\\/", 0, places_cb, const_cast<char *>("/"));
+
     xdg xdg;
     const int rv = xdg.get(true, true);
 
@@ -515,6 +528,10 @@ public:
     if (!T::empty(dirname)) load_dir_ = dirname;
   }
 
+  void set_dir(const std::string &dirname) {
+    set_dir(dirname.c_str());
+  }
+
   // calls load_dir() on table_ and tree_
   bool load_dir(const char *dirname)
   {
@@ -525,9 +542,13 @@ public:
     }
 
     if (!table_->load_dir(dirname)) return false;
-    prev_ = s;
+    add_to_history(s);
 
     return load_open_directory();
+  }
+
+  bool load_dir(const std::string &dirname) {
+    return load_dir(dirname.c_str());
   }
 
   // move directory up (table_ and tree_)
@@ -540,7 +561,7 @@ public:
     }
 
     if (!table_->dir_up()) move_up_tree();
-    prev_ = s;
+    add_to_history(s);
 
     return load_open_directory();
   }
@@ -569,7 +590,7 @@ public:
 
     if (!table_->refresh()) {
       move_up_tree();
-      prev_ = s;
+      add_to_history(s);
     }
 
     const char *l = b_back->label();
