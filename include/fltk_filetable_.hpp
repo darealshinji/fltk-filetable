@@ -642,7 +642,7 @@ protected:
 
     va_start(args, fmt);
     va_copy(args2, args);
-    buf = reinterpret_cast<char *>(malloc(vsnprintf(nullptr, 0, fmt, args2) + 1));
+    buf = static_cast<char *>(malloc(vsnprintf(nullptr, 0, fmt, args2) + 1));
     va_end(args2);
     vsprintf(buf, fmt, args);
     va_end(args);
@@ -828,9 +828,7 @@ public:
     type(SELECT_SINGLE);
 
     when(FL_WHEN_RELEASE);
-    callback(static_cast<void(*)(Fl_Widget *)>(
-      [](Fl_Widget *o) { reinterpret_cast<filetable_ *>(o)->event_callback(); }
-    ));
+    callback( [](Fl_Widget *o){ static_cast<filetable_ *>(o)->event_callback(); } );
 
     end();
   }

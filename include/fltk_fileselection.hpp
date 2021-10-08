@@ -38,7 +38,6 @@
 #include <string>
 #include <vector>
 #include <string.h>
-//#include <assert.h>
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
@@ -47,13 +46,6 @@
 
 #ifdef FLTK_EXPERIMENTAL
 #include "fltk_filetable_magic.hpp"
-#endif
-
-#ifndef FS_CALLBACK
-#define FS_CALLBACK(FUNC) \
-  static_cast<void(*)(Fl_Widget*, void*)>(\
-    [](Fl_Widget*, void *v) { reinterpret_cast<decltype(this)>(v)->FUNC; }\
-  )
 #endif
 
 
@@ -148,11 +140,11 @@ private:
     }
 
     static void copy_selection_cb(Fl_Widget *, void *v) {
-      reinterpret_cast<addressline *>(v)->copy(1);
+      static_cast<addressline *>(v)->copy(1);
     }
 
     static void copy_cb(Fl_Widget *, void *v) {
-      const char *text = reinterpret_cast<addressline *>(v)->value();
+      const char *text = static_cast<addressline *>(v)->value();
       if (text) Fl::copy(text, strlen(text), 1);
     }
 
@@ -162,20 +154,31 @@ private:
     }
   };
 
+  enum {
+    CB_OK,
+    CB_CANCEL,
+    CB_TREE,
+    CB_UP,
+    CB_RELOAD,
+    CB_HIDDEN,
+    CB_PREV,
+    CB_NEXT
+  };
+
   std::string data_[xdg::LAST + 1]; // XDG dirs + $HOME
   uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
 
   enum { HISTORY_MAX = 10 };
   Fl_Menu_Item mprev_[HISTORY_MAX + 1] = {0};
+  Fl_Menu_Item mnext_[HISTORY_MAX + 1] = {0};
 
   typedef struct {
     std::string base;
     std::string path;
   } path_t;
-  std::vector<path_t> vprev_;
+  std::vector<path_t> vprev_, vnext_;
 
-  std::string selection_, load_dir_;
-  const char *label_back_ = "@<|", *label_forth_ = "@|>";
+  std::string selection_, load_dir_, prev_;
 
   dirtree *tree_;
   filetable_sub *table_;
@@ -183,8 +186,8 @@ private:
 
   Fl_Group *g_top, *g_bot;
   Fl_Tile *g_main;
-  Fl_Menu_Button *b_places, *b_history;
-  Fl_Button *b_up, *b_reload, *b_cancel, *b_back;
+  Fl_Menu_Button *b_places, *b_list_prev, *b_list_next;
+  Fl_Button *b_up, *b_reload, *b_cancel, *b_prev, *b_next;
   Fl_Return_Button *b_ok;
   Fl_Toggle_Button *b_hidden;
   Fl_Box *g_top_dummy, *g_bot_dummy;
@@ -206,6 +209,8 @@ protected:
       window()->hide();
     }
   }
+
+private:
 
   void tree_callback()
   {
@@ -232,24 +237,58 @@ protected:
   }
 
   // add entry to history
-  void add_to_history(const std::string &path)
+  void add_to_history(const char *path, std::vector<path_t> &vec)
   {
-    if (path.empty()) return;
+    if (T::empty(path)) return;
     path_t entry;
-    const char *base = basename(path.c_str());
+    const char *base = basename(path);
     entry.base = T::empty(base) ? path : base;
     entry.path = path;
-    vprev_.insert(vprev_.begin(), entry);
+    vec.insert(vec.begin(), entry);
+  }
+
+  void update_history()
+  {
+    int i = 0;
+
+    // keep list at a maximum size
+    while (vprev_.size() >= HISTORY_MAX + 1) {
+      vprev_.pop_back();
+    }
+
+    while (vnext_.size() >= HISTORY_MAX + 1) {
+      vnext_.pop_back();
+    }
+
+    // clear old menus
+    for ( ; i <= HISTORY_MAX; ++i) {
+      mprev_[i] = mnext_[i] = {0};
+    }
+
+    // update menus
+
+    auto it = vprev_.begin();
+
+    for (i=0; it != vprev_.end(); ++i, ++it) {
+      const path_t &p = *it;
+      mprev_[i].text = p.base.c_str();
+      mprev_[i].user_data_ = reinterpret_cast<void *>(i);
+      mprev_[i].callback_ = reinterpret_cast<Fl_Callback *>(previous_cb);
+    }
+
+    for (i=0, it=vnext_.begin(); it != vnext_.end(); ++i, ++it) {
+      const path_t &p = *it;
+      mnext_[i].text = p.base.c_str();
+      mnext_[i].user_data_ = reinterpret_cast<void *>(i);
+      mnext_[i].callback_ = reinterpret_cast<Fl_Callback *>(next_cb);
+    }
   }
 
   // load currently open directory in tree_
   // or load the directory that was set with set_dir()
   // in tree_ and table_
-  bool load_open_directory()
+  bool load_open_directory(bool keep_history=false)
   {
-    // reset label
-    b_back->label(label_back_);
-
     // a directory was set with set_dir()
     if (!load_dir_.empty()) {
       // will set open_directory_ on success
@@ -288,47 +327,34 @@ protected:
       }
     }
 
-    if (vprev_.size() == 0 || vprev_.at(0).path.compare(dir) == 0) {
+    if (vprev_.size() == 0 || prev_.compare(dir) == 0) {
       return rv;
     }
 
+    if (keep_history) return rv;
+
     // add previous directory to the history list
 
-    b_back->activate();
-    b_history->activate();
+    b_prev->activate();
+    b_list_prev->activate();
 
-    auto it = vprev_.begin();
-    const path_t &pprev = *it;
-    const std::string &prev = pprev.path;
+    b_next->deactivate();
+    b_list_next->deactivate();
+    vnext_.clear();
+
+    const std::string &s = (*vprev_.begin()).path;
 
     // delete duplicates and current directory
-    for (it++; it != vprev_.end(); ++it) {
+    for (auto it = vprev_.begin()+1; it != vprev_.end(); ++it) {
       const path_t &p = *it;
 
-      if (p.path == prev || p.path.compare(dir) == 0) {
+      if (p.path == s || p.path.compare(dir) == 0) {
         vprev_.erase(it);
         it--;
       }
     }
 
-    // keep list at a maximum size
-    while (vprev_.size() >= HISTORY_MAX+1) {
-      vprev_.pop_back();
-    }
-
-    // clear old menu
-    int i = 0;
-    for ( ; i <= HISTORY_MAX; ++i) {
-      mprev_[i] = {0};
-    }
-
-    // update menu
-    for (i=0, it=vprev_.begin(); it != vprev_.end(); ++i, ++it) {
-      const path_t &p = *it;
-      mprev_[i].text = p.base.c_str();
-      mprev_[i].user_data_ = const_cast<char *>(p.path.c_str());
-      mprev_[i].callback_ = places_cb;
-    }
+    update_history();
 
     return rv;
   }
@@ -364,12 +390,50 @@ protected:
     refresh();
   }
 
-  static void places_cb(Fl_Widget *o, void *v)
+  static void previous_cb(Fl_Widget *o, long n) {
+    static_cast<fileselection *>(o->parent()->parent())->history(n);
+  }
+
+  static void next_cb(Fl_Widget *o, long n) {
+    static_cast<fileselection *>(o->parent()->parent())->history(n, true);
+  }
+
+  static void places_cb(Fl_Widget *o, void *v) {
+    static_cast<fileselection *>(o->parent()->parent())->load_dir(static_cast<const char *>(v));
+  }
+
+  static void member_func_cb(Fl_Widget *o, long n)
   {
-    if (!v || !o) return;
-    //assert(dynamic_cast<fileselection *>(o->parent()->parent()));
-    fileselection *fs = dynamic_cast<fileselection *>(o->parent()->parent());
-    if (fs) fs->load_dir(reinterpret_cast<const char *>(v));
+    auto fs = static_cast<fileselection *>(o->parent()->parent());
+
+    switch (n) {
+      case CB_CANCEL:
+        fs->window()->hide();
+        break;
+      case CB_OK:
+        fs->double_click_callback();
+        break;
+      case CB_TREE:
+        fs->tree_callback();
+        break;
+      case CB_UP:
+        fs->dir_up();
+        break;
+      case CB_RELOAD:
+        fs->refresh();
+        break;
+      case CB_HIDDEN:
+        fs->toggle_hidden();
+        break;
+      case CB_PREV:
+        fs->history(0);
+        break;
+      case CB_NEXT:
+        fs->history(0, true);
+        break;
+      default:
+        break;
+    }
   }
 
   int handle(int event)
@@ -392,7 +456,8 @@ public:
   fileselection(int X, int Y, int W, int H, int spacing=4)
   : Fl_Group(X,Y,W,H, NULL)
   {
-    vprev_.reserve(HISTORY_MAX + 1);
+    vprev_.reserve(HISTORY_MAX);
+    vnext_.reserve(HISTORY_MAX);
 
     if (spacing < 0) spacing = 0;
     if (spacing > 24) spacing = 24;
@@ -409,23 +474,31 @@ public:
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
 
       b_up = new Fl_Button(b_places->x() + b_places->w(), but_y, but_h, but_h, "@+78->");
-      b_up->callback(FS_CALLBACK( dir_up() ), this);
+      b_up->callback(member_func_cb, CB_UP);
 
       b_reload = new Fl_Button(b_up->x() + b_up->w(), but_y, but_h, but_h, "@+4reload");
-      b_reload->callback(FS_CALLBACK( refresh() ), this);
+      b_reload->callback(member_func_cb, CB_RELOAD);
 
       b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w(), but_y, 60, but_h, "Show\nhidden");
-      b_hidden->callback(FS_CALLBACK( toggle_hidden() ), this);
+      b_hidden->callback(member_func_cb, CB_HIDDEN);
 
-      b_back = new Fl_Button(b_hidden->x() + b_hidden->w(), but_y, but_h, but_h, label_back_);
-      b_back->callback(FS_CALLBACK( back() ), this);
-      b_back->deactivate();
+      b_prev = new Fl_Button(b_hidden->x() + b_hidden->w(), but_y, but_h, but_h, "@<|");
+      b_prev->callback(member_func_cb, CB_PREV);
+      b_prev->deactivate();
 
-      b_history = new Fl_Menu_Button(b_back->x() + b_back->w(), but_y, 21, but_h);
-      b_history->menu(reinterpret_cast<const Fl_Menu_Item *>(&mprev_));
-      b_history->deactivate();
+      b_list_prev = new Fl_Menu_Button(b_prev->x() + b_prev->w(), but_y, 21, but_h);
+      b_list_prev->menu(reinterpret_cast<Fl_Menu_Item *>(&mprev_));
+      b_list_prev->deactivate();
 
-      g_top_dummy = new Fl_Box(b_history->x() + b_history->w(), but_y, 1, 1);
+      b_next = new Fl_Button(b_list_prev->x() + b_list_prev->w(), but_y, but_h, but_h, "@|>");
+      b_next->callback(member_func_cb, CB_NEXT);
+      b_next->deactivate();
+
+      b_list_next = new Fl_Menu_Button(b_next->x() + b_next->w(), but_y, 21, but_h);
+      b_list_next->menu(reinterpret_cast<Fl_Menu_Item *>(&mnext_));
+      b_list_next->deactivate();
+
+      g_top_dummy = new Fl_Box(b_list_prev->x() + b_list_prev->w(), but_y, 1, 1);
     }
     g_top->end();
     g_top->resizable(g_top_dummy);
@@ -437,7 +510,7 @@ public:
     g_main = new Fl_Tile(X, Y + g_top->h(), W, main_h);
     {
       tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
-      tree_->callback(FS_CALLBACK( tree_callback() ), this);
+      tree_->callback(member_func_cb, CB_TREE);
       tree_->selection_color(FL_WHITE);
 
       table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
@@ -452,11 +525,11 @@ public:
     g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
     {
       b_ok = new Fl_Return_Button(X + W - 90, bot_y + spacing, 90, g_bot_h - spacing, "OK");
-      b_ok->callback(FS_CALLBACK( double_click_callback() ), this);
+      b_ok->callback(member_func_cb, CB_OK);
       b_ok->deactivate();
 
       b_cancel = new Fl_Button(X + W - 180 - spacing, bot_y + spacing, 90, g_bot_h - spacing, "Cancel");
-      b_cancel->callback(FS_CALLBACK( window()->hide() ), this);
+      b_cancel->callback(member_func_cb, CB_CANCEL);
 
       g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + spacing, 1, 1);
     }
@@ -504,9 +577,9 @@ public:
 
         int i = 2;
 
-        for (const int j : xdg_vec_) {
-          data_[i] = xdg.dir(j);
-          b_places->add(xdg.basename(j), 0, places_cb, const_cast<char *>(data_[i].c_str()));
+        for (const int n : xdg_vec_) {
+          data_[i] = xdg.dir(n);
+          b_places->add(xdg.basename(n), 0, places_cb, const_cast<char *>(data_[i].c_str()));
           i++;
         }
       }
@@ -542,7 +615,7 @@ public:
     }
 
     if (!table_->load_dir(dirname)) return false;
-    add_to_history(s);
+    add_to_history(s.c_str(), vprev_);
 
     return load_open_directory();
   }
@@ -561,21 +634,57 @@ public:
     }
 
     if (!table_->dir_up()) move_up_tree();
-    add_to_history(s);
+    add_to_history(s.c_str(), vprev_);
 
     return load_open_directory();
   }
 
-  void back()
+  // go back/forth in history
+  void history(long num, bool next=false)
   {
-    const char *l = b_back->label();
+    std::vector<path_t> *v1, *v2;
+    Fl_Button *b1, *b2;
+    Fl_Menu_Button *blist1, *blist2;
 
-    load_dir(reinterpret_cast<const char *>(mprev_[0].user_data()));
+    v1 = next ? &vnext_ : &vprev_;
+    if (v1->size() == 0) return;
 
-    if (strcmp(l, label_back_) == 0) {
-      b_back->label(label_forth_);
+    if (next) {
+      v2 = &vprev_;
+      b1 = b_next;
+      b2 = b_prev;
+      blist1 = b_list_next;
+      blist2 = b_list_prev;
     } else {
-      b_back->label(label_back_);
+      v2 = &vnext_;
+      b1 = b_prev;
+      b2 = b_next;
+      blist1 = b_list_prev;
+      blist2 = b_list_next;
+    }
+
+    add_to_history(table_->open_directory(), *v2);
+
+    for (long i=0; i < num; ++i) {
+      v2->insert(v2->begin(), v1->at(i));
+    }
+
+    path_t p = v1->at(num);
+    std::string curr = p.path;
+
+    v1->erase(v1->begin(), v1->begin() + num + 1);
+
+    if (v1->size() == 0) {
+      b1->deactivate();
+      blist1->deactivate();
+    }
+
+    b2->activate();
+    blist2->activate();
+    update_history();
+
+    if (table_->load_dir(curr.c_str())) {
+      load_open_directory(true);
     }
   }
 
@@ -590,14 +699,10 @@ public:
 
     if (!table_->refresh()) {
       move_up_tree();
-      add_to_history(s);
+      add_to_history(s.c_str(), vprev_);
     }
 
-    const char *l = b_back->label();
-    bool rv = load_open_directory();
-
-    b_back->label(l);
-    return rv;
+    return load_open_directory();
   }
 
   // alternative to refresh()

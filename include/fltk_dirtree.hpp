@@ -150,7 +150,7 @@ private:
 
   static void default_callback(Fl_Widget *w, void *)
   {
-    dirtree *o = reinterpret_cast<dirtree *>(w);
+    dirtree *o = static_cast<dirtree *>(w);
 
     switch(o->callback_reason()) {
       /*
