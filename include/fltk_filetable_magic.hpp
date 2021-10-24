@@ -343,6 +343,16 @@ private:
     */
   }
 
+  void stop_thread()
+  {
+    if (!th_) return;
+    request_stop_ = true;
+    th_->join();
+    delete th_;
+    th_ = NULL;
+    request_stop_ = false;
+  }
+
 public:
   // c'tor
   filetable_magic(int X, int Y, int W, int H, const char *L=NULL) : filetable_(X,Y,W,H,L)
@@ -382,13 +392,7 @@ public:
   // d'tor
   virtual ~filetable_magic()
   {
-    if (th_) {
-      request_stop_ = true;
-      th_->join();
-      delete th_;
-      //th_ = NULL;
-      //request_stop_ = false;
-    }
+    stop_thread();
 
     for (int i = 0; i < ICN_LAST; ++i) {
       if (icn_[i].alloc && icn_[i].svg) {
@@ -423,13 +427,7 @@ public:
       }
     }
 
-    if (th_) {
-      request_stop_ = true;
-      th_->join();
-      delete th_;
-      th_ = NULL;
-      request_stop_ = false;
-    }
+    stop_thread();
 
     if (!filetable_::load_dir(dirname)) {
       return false;

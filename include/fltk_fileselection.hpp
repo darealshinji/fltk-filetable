@@ -35,9 +35,24 @@
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Tile.H>
+#include <FL/filename.H>
+
+#include <algorithm>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
+
+#include <stdio.h>
 #include <string.h>
+#include <dirent.h>
+#include <mntent.h>
+#include <pwd.h>
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
@@ -48,9 +63,15 @@
 #include "fltk_filetable_magic.hpp"
 #endif
 
+#define CALLBACK(x) \
+  [] (Fl_Widget *o, void *) { \
+    static_cast<fileselection *>(o->parent()->parent())->x; \
+  }
+
 
 // TODO:
 // * focus issues
+// * make partition/gio stuff optional
 
 
 namespace fltk
@@ -154,23 +175,25 @@ private:
     }
   };
 
-  enum {
-    CB_OK,
-    CB_CANCEL,
-    CB_TREE,
-    CB_UP,
-    CB_RELOAD,
-    CB_HIDDEN,
-    CB_PREV,
-    CB_NEXT
-  };
-
   std::string data_[xdg::LAST + 1]; // XDG dirs + $HOME
   uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
 
   enum { HISTORY_MAX = 10 };
   Fl_Menu_Item mprev_[HISTORY_MAX + 1] = {0};
   Fl_Menu_Item mnext_[HISTORY_MAX + 1] = {0};
+
+  enum { UUID_MAX_SIZE = 36 };
+
+  typedef struct {
+    std::string dev;
+    std::string label;
+    char uuid[UUID_MAX_SIZE + 1];
+    long long size;  // bytes
+    std::string path;
+    fileselection *fs;
+  } partition_t;
+
+  std::vector<partition_t> partitions_;
 
   typedef struct {
     std::string base;
@@ -179,6 +202,10 @@ private:
   std::vector<path_t> vprev_, vnext_;
 
   std::string selection_, load_dir_, prev_;
+  char *user_ = NULL;
+
+  std::thread *th_ = NULL;
+  pid_t pid_ = -1;
 
   dirtree *tree_;
   filetable_sub *table_;
@@ -186,6 +213,7 @@ private:
 
   Fl_Group *g_top, *g_bot;
   Fl_Tile *g_main;
+  Fl_Menu_Button *b_devices = NULL;
   Fl_Menu_Button *b_places, *b_list_prev, *b_list_next;
   Fl_Button *b_up, *b_reload, *b_cancel, *b_prev, *b_next;
   Fl_Return_Button *b_ok;
@@ -211,6 +239,11 @@ protected:
   }
 
 private:
+
+  // check if const char * is empty
+  inline static bool empty(const char *val) {
+    return (!val || *val == 0) ? true : false;
+  }
 
   void tree_callback()
   {
@@ -239,10 +272,10 @@ private:
   // add entry to history
   void add_to_history(const char *path, std::vector<path_t> &vec)
   {
-    if (T::empty(path)) return;
+    if (empty(path)) return;
     path_t entry;
     const char *base = basename(path);
-    entry.base = T::empty(base) ? path : base;
+    entry.base = empty(base) ? path : base;
     entry.path = path;
     vec.insert(vec.begin(), entry);
   }
@@ -284,11 +317,276 @@ private:
     }
   }
 
+  // get available partitions
+  std::vector<partition_t> get_partitions()
+  {
+    FILE *fp;
+    DIR *dp;
+    struct mntent *mnt;
+    struct dirent *dir;
+    std::vector<partition_t> devices;
+    std::vector<std::string> automount, ignored;
+
+
+    // read /etc/fstab for ignored automounted partitions
+
+    if ((fp = fopen("/etc/fstab", "r")) == NULL) {
+      return {};
+    }
+
+    while ((mnt = getmntent(fp)) != NULL) {
+      if (mnt->mnt_dir[0] == '/') {
+        automount.push_back(mnt->mnt_dir);
+      }
+    }
+
+    fclose(fp);
+
+
+    // get disk UUIDs
+
+    if ((dp = opendir("/dev/disk/by-uuid")) == NULL) {
+      return {};
+    }
+
+    while ((dir = readdir(dp)) != NULL) {
+      const char *p = dir->d_name;
+
+      if (p[0] == '.' || strlen(p) > UUID_MAX_SIZE) {
+        continue;
+      }
+
+      std::string path = "/dev/disk/by-uuid/";
+      path += p;
+
+      char *rp = realpath(path.c_str(), NULL);
+      if (!rp) continue;
+
+      if (strncmp(rp, "/dev/", 5) != 0) {
+        free(rp);
+        continue;
+      }
+
+      partition_t dev;
+      dev.dev = rp;
+      strcpy(dev.uuid, p);
+      dev.size = 0;
+      dev.fs = this;
+
+      free(rp);
+      devices.push_back(dev);
+    }
+
+    closedir(dp);
+
+
+    // get disk labels
+
+    if ((dp = opendir("/dev/disk/by-label")) == NULL) {
+      return {};
+    }
+
+    while ((dir = readdir(dp)) != NULL) {
+      const char *p = dir->d_name;
+      if (p[0] == '.') continue;
+
+      std::string path = "/dev/disk/by-label/";
+      path += p;
+
+      char *rp = realpath(path.c_str(), NULL);
+      if (!rp) continue;
+
+      if (strncmp(rp, "/dev/", 5) != 0) {
+        free(rp);
+        continue;
+      }
+
+      for (auto &e : devices) {
+        if (e.dev.compare(rp) == 0) {
+          e.label = e.path = p;
+
+          // resolve escape sequences
+
+          // label
+          for (size_t pos=0; (pos = e.label.find("\\x", pos)) != std::string::npos; ++pos) {
+            std::string s = e.label.substr(pos + 2, 2);
+            if (s.size() != 2) continue;
+
+            if (s == "0a") {
+              // replace newline with "\n" escape sequence
+              e.label.replace(pos, 4, "\\n");
+            } else {
+              std::istringstream iss(s);
+              int n = 0;
+              iss >> std::hex >> n;
+              if (n < 1 || n > 255) continue;
+              char c = static_cast<char>(n);
+
+              if (c == '/') {
+                // escape slash in a label
+                e.label.replace(pos, 4, "\\/");
+              } else {
+                e.label.replace(pos, 4, 1, static_cast<char>(n));
+              }
+            }
+          }
+
+          // path
+          for (size_t pos=0; (pos = e.path.find("\\x", pos)) != std::string::npos; ++pos) {
+            std::string s = e.path.substr(pos + 2, 2);
+            if (s.size() != 2) continue;
+
+            if (s == "2f") {
+              // replace slash with underscore
+              e.path.replace(pos, 4, 1, '_');
+            } else {
+              std::istringstream iss(s);
+              int n = 0;
+              iss >> std::hex >> n;
+
+              if (n > 0 && n < 256) {
+                e.path.replace(pos, 4, 1, static_cast<char>(n));
+              }
+            }
+          }
+        }
+      }
+
+      free(rp);
+    }
+
+    closedir(dp);
+
+
+    // get "/dev" address of ignored partitions
+    if (automount.size() > 0) {
+      if ((fp = fopen("/etc/mtab", "r")) == NULL) {
+        return {};
+      }
+
+      while ((mnt = getmntent(fp)) != NULL) {
+        for (const auto &e : automount) {
+          if (e.compare(mnt->mnt_dir) == 0) {
+            ignored.push_back(mnt->mnt_fsname);
+          }
+        }
+      }
+
+      fclose(fp);
+    }
+
+
+    // remove ignored devices
+    for (auto it = ignored.begin(); it != ignored.end(); ++it) {
+      const std::string &s_ignored = *it;
+
+      for (auto it2 = devices.begin(); it2 != devices.end(); ) {
+        partition_t &e = *it2;
+
+        if (s_ignored == e.dev) {
+          devices.erase(it2);
+          continue;
+        }
+
+        it2++;
+      }
+    }
+
+
+    // remove leading "/dev/" from device paths
+    for (auto &e : devices) {
+      e.dev.erase(0, 5);
+      e.dev.shrink_to_fit();
+    }
+
+
+    // sort by name
+    auto lambda = [] (const partition_t &a, const partition_t &b) {
+      const char *label_a = a.label.empty() ? a.dev.c_str() : a.label.c_str();
+      const char *label_b = b.label.empty() ? b.dev.c_str() : b.label.c_str();
+      return strcasecmp(label_a, label_b) < 0;
+    };
+    std::sort(devices.begin(), devices.end(), lambda);
+
+
+    // get partition sizes
+    for (partition_t &e : devices) {
+      std::string s = e.dev;
+
+      while (isdigit(s.back())) s.pop_back();
+      if (s.empty()) continue;
+
+      std::string line;
+      std::string file = "/sys/block/" + s + "/" + e.dev + "/size";
+      std::ifstream ifs(file);
+
+      if (ifs.is_open() && std::getline(ifs, line) && !line.empty()) {
+        // Linux always considers sectors to be 512 bytes long independently of the devices real block size.
+        // https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/include/linux/types.h?id=v4.4-rc6#n121
+        e.size = atoll(line.c_str()) * 512;
+      }
+    }
+
+    return devices;
+  }
+
+  // add partitions to menu
+  void add_partitions()
+  {
+    if (!user_ || !b_devices) return;
+
+    b_devices->deactivate();
+    b_devices->clear();
+    partitions_.clear();
+
+    partitions_ = get_partitions();
+
+    for (size_t i = 0; i < partitions_.size(); ++i) {
+      partition_t &e = partitions_.at(i);
+
+      std::string s = "/media/";
+      s += user_;
+      s += '/';
+
+      if (e.path.empty()) {
+        e.path = s + e.uuid;
+      } else {
+        e.path.insert(0, s);
+      }
+
+      s = e.label.empty() ? e.dev : e.label;
+      char *size = table_->human_readable_filesize(e.size);
+
+      if (size) {
+        s += " - ";
+        s += size;
+        free(size);
+      }
+
+      std::string unmount = "Unmount/" + s;
+      int flags = FL_MENU_INACTIVE;
+
+      if (fl_filename_isdir(e.path.c_str())) {
+        s.insert(0, "*");
+        flags = 0;
+      }
+
+      void *arg = reinterpret_cast<void *>(&partitions_.at(i));
+      b_devices->add(unmount.c_str(), 0, unmount_cb, arg, flags);
+      b_devices->add(s.c_str(), 0, partition_cb, arg);
+    }
+
+    if (partitions_.size() > 0) b_devices->activate();
+  }
+
   // load currently open directory in tree_
   // or load the directory that was set with set_dir()
   // in tree_ and table_
   bool load_open_directory(bool keep_history=false)
   {
+    // update menu first
+    add_partitions();
+
     // a directory was set with set_dir()
     if (!load_dir_.empty()) {
       // will set open_directory_ on success
@@ -360,11 +658,12 @@ private:
   }
 
   // move up the tree until we can open a directory, otherwise open root
-  void move_up_tree()
+  void move_up_tree(const char *dirname=NULL)
   {
-    if (!table_->open_directory()) return;
+    if (!dirname) dirname = table_->open_directory();
+    if (!dirname) return;
 
-    std::string s = filetable_::simplify_directory_path(table_->open_directory());
+    std::string s = filetable_::simplify_directory_path(dirname);
     char * const path = const_cast<char *>(s.data());
     char *p = path + s.length();
 
@@ -390,6 +689,104 @@ private:
     refresh();
   }
 
+  void kill_pid()
+  {
+    if (pid_ > getpid() && kill(pid_, 0) == 0) {
+      kill(pid_, 1);
+      pid_ = -1;
+    }
+  }
+
+  void stop_thread()
+  {
+    if (th_) {
+      if (th_->joinable()) th_->join();
+      delete th_;
+    }
+    th_ = NULL;
+  }
+
+  // thread waiting for child to exit and return status
+  static void wait_for_child_process(pid_t pid, fileselection *o, const char *path)
+  {
+    int status = 0;
+    int rv = -1;
+
+    if (waitpid(pid, &status, 0) > 0 && WIFEXITED(status)) {
+      rv = WEXITSTATUS(status);
+    }
+
+    if (rv != 0) return;
+
+    // successfully mounted
+    Fl::lock();
+
+    if (empty(path))  {
+      o->refresh();
+    } else {
+      o->load_dir(path);
+    }
+
+    Fl::unlock();
+  }
+
+  void load_partition(partition_t *part)
+  {
+    kill_pid();
+    if (!part) return;
+
+    const char *path = part->path.c_str();
+
+    if (fl_filename_isdir(path)) {
+      load_dir(path);
+      return;
+    }
+
+    // fork process
+    if ((pid_ = fork()) == 0) {
+      // redirect output instead of using close()
+      // https://stackoverflow.com/a/33268567/5687704
+      FILE *fp = freopen("/dev/null", "w", stdout);
+      fp = freopen("/dev/null", "w", stderr);
+      static_cast<void>(fp);  // silence -Wunused-result
+
+      execlp("gio", "gio", "mount", "-f", "-a", "-d", part->uuid, NULL);
+      _exit(127);
+    }
+
+    // wait for child process in a separate thread
+    if (pid_ > 0) {
+      th_ = new std::thread(wait_for_child_process, pid_, this, path);
+    }
+  }
+
+  void unmount_partition(partition_t *part)
+  {
+    kill_pid();
+    if (!part) return;
+
+    const char *path = part->path.c_str();
+
+    if (!fl_filename_isdir(path)) return;
+
+    // fork process
+    if ((pid_ = fork()) == 0) {
+      // redirect output instead of using close()
+      // https://stackoverflow.com/a/33268567/5687704
+      FILE *fp = freopen("/dev/null", "w", stdout);
+      fp = freopen("/dev/null", "w", stderr);
+      static_cast<void>(fp);  // silence -Wunused-result
+
+      execlp("gio", "gio", "mount", "-f", "-a", "-u", path, NULL);
+      _exit(127);
+    }
+
+    // wait for child process in a separate thread
+    if (pid_ > 0) {
+      th_ = new std::thread(wait_for_child_process, pid_, this, static_cast<const char *>(NULL));
+    }
+  }
+
   static void previous_cb(Fl_Widget *o, long n) {
     static_cast<fileselection *>(o->parent()->parent())->history(n);
   }
@@ -402,38 +799,12 @@ private:
     static_cast<fileselection *>(o->parent()->parent())->load_dir(static_cast<const char *>(v));
   }
 
-  static void member_func_cb(Fl_Widget *o, long n)
-  {
-    auto fs = static_cast<fileselection *>(o->parent()->parent());
+  static void partition_cb(Fl_Widget *o, void *v) {
+    static_cast<fileselection *>(o->parent()->parent())->load_partition(static_cast<partition_t *>(v));
+  }
 
-    switch (n) {
-      case CB_CANCEL:
-        fs->window()->hide();
-        break;
-      case CB_OK:
-        fs->double_click_callback();
-        break;
-      case CB_TREE:
-        fs->tree_callback();
-        break;
-      case CB_UP:
-        fs->dir_up();
-        break;
-      case CB_RELOAD:
-        fs->refresh();
-        break;
-      case CB_HIDDEN:
-        fs->toggle_hidden();
-        break;
-      case CB_PREV:
-        fs->history(0);
-        break;
-      case CB_NEXT:
-        fs->history(0, true);
-        break;
-      default:
-        break;
-    }
+  static void unmount_cb(Fl_Widget *o, void *v) {
+    static_cast<fileselection *>(o->parent()->parent())->unmount_partition(static_cast<partition_t *>(v));
   }
 
   int handle(int event)
@@ -462,6 +833,15 @@ public:
     if (spacing < 0) spacing = 0;
     if (spacing > 24) spacing = 24;
 
+    // get username
+    passwd *pw = getpwuid(geteuid());
+
+    if (pw && pw->pw_name) {
+      user_ = pw->pw_name;
+    } else {
+      user_ = getenv("USER");
+    }
+
     // top buttons
     const int addr_h = FL_NORMAL_SIZE + 12;
     const int but_h = 42;
@@ -473,17 +853,20 @@ public:
 
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
 
-      b_up = new Fl_Button(b_places->x() + b_places->w(), but_y, but_h, but_h, "@+78->");
-      b_up->callback(member_func_cb, CB_UP);
+      b_devices = new Fl_Menu_Button(b_places->x() + b_places->w(), but_y, 82, but_h, "Devices");
+      b_devices->deactivate();
+
+      b_up = new Fl_Button(b_devices->x() + b_devices->w(), but_y, but_h, but_h, "@+78->");
+      b_up->callback(CALLBACK(dir_up()));
 
       b_reload = new Fl_Button(b_up->x() + b_up->w(), but_y, but_h, but_h, "@+4reload");
-      b_reload->callback(member_func_cb, CB_RELOAD);
+      b_reload->callback(CALLBACK(refresh()));
 
       b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w(), but_y, 60, but_h, "Show\nhidden");
-      b_hidden->callback(member_func_cb, CB_HIDDEN);
+      b_hidden->callback(CALLBACK(toggle_hidden()));
 
       b_prev = new Fl_Button(b_hidden->x() + b_hidden->w(), but_y, but_h, but_h, "@<|");
-      b_prev->callback(member_func_cb, CB_PREV);
+      b_prev->callback(previous_cb, 0);
       b_prev->deactivate();
 
       b_list_prev = new Fl_Menu_Button(b_prev->x() + b_prev->w(), but_y, 21, but_h);
@@ -491,7 +874,7 @@ public:
       b_list_prev->deactivate();
 
       b_next = new Fl_Button(b_list_prev->x() + b_list_prev->w(), but_y, but_h, but_h, "@|>");
-      b_next->callback(member_func_cb, CB_NEXT);
+      b_next->callback(next_cb, 0);
       b_next->deactivate();
 
       b_list_next = new Fl_Menu_Button(b_next->x() + b_next->w(), but_y, 21, but_h);
@@ -510,7 +893,7 @@ public:
     g_main = new Fl_Tile(X, Y + g_top->h(), W, main_h);
     {
       tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
-      tree_->callback(member_func_cb, CB_TREE);
+      tree_->callback(CALLBACK(tree_callback()));
       tree_->selection_color(FL_WHITE);
 
       table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
@@ -525,11 +908,11 @@ public:
     g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
     {
       b_ok = new Fl_Return_Button(X + W - 90, bot_y + spacing, 90, g_bot_h - spacing, "OK");
-      b_ok->callback(member_func_cb, CB_OK);
+      b_ok->callback(CALLBACK(double_click_callback()));
       b_ok->deactivate();
 
       b_cancel = new Fl_Button(X + W - 180 - spacing, bot_y + spacing, 90, g_bot_h - spacing, "Cancel");
-      b_cancel->callback(member_func_cb, CB_CANCEL);
+      b_cancel->callback(CALLBACK(cancel()));
 
       g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + spacing, 1, 1);
     }
@@ -585,20 +968,28 @@ public:
       }
     }
 
+    add_partitions();
     end();
     resizable(g_main);
   }
 
   // d'tor
-  virtual ~fileselection() {
+  virtual ~fileselection()
+  {
+    kill_pid();
+    stop_thread();
     if (tree_) delete tree_;
     if (table_) delete table_;
+  }
+
+  void cancel() {
+    window()->hide();
   }
 
   // set directory without loading it; use refresh() to load it
   void set_dir(const char *dirname) {
     load_dir_.clear();
-    if (!T::empty(dirname)) load_dir_ = dirname;
+    if (!empty(dirname)) load_dir_ = dirname;
   }
 
   void set_dir(const std::string &dirname) {
@@ -614,7 +1005,15 @@ public:
       s = table_->open_directory();
     }
 
-    if (!table_->load_dir(dirname)) return false;
+    if (!table_->load_dir(dirname)) {
+      if (dirname[0] == '/') {
+        move_up_tree(dirname);
+      } else {
+        add_partitions();
+        return false;
+      }
+    }
+
     add_to_history(s.c_str(), vprev_);
 
     return load_open_directory();

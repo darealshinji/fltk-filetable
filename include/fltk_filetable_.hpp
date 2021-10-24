@@ -109,6 +109,7 @@ protected:
   // single row of columns
   typedef struct {
     char *cols[COL_MAX] = {0};
+    char *label = NULL;
     Fl_SVG_Image *svg = NULL;
     char type = 0;
     bool isdir() const { return (type == 'D'); }
@@ -483,8 +484,14 @@ protected:
           // Bg color
           fl_rectf(X, Y, W, H, bgcol);
 
-          // Icon
+          // Icon and label
+          const char *label = rowdata_.at(R).cols[C];
+
           if (C == COL_NAME) {
+            if (rowdata_.at(R).label) {
+              label = rowdata_.at(R).label;
+            }
+
             if (!rowdata_.at(R).svg) {
               rowdata_.at(R).svg = icon(rowdata_.at(R));
             }
@@ -508,7 +515,7 @@ protected:
           // Text
           fl_font(labelfont(), labelsize());
           fl_color(fl_contrast(labelcolor(), bgcol));
-          fl_draw(rowdata_.at(R).cols[C], X, Y + 2, W, H - 2, al, NULL, 0);
+          fl_draw(label, X, Y + 2, W, H - 2, al, NULL, 0);
 
           // blend over long text at the end of name column
           if (C == COL_NAME && blend_w() > 0) {
@@ -648,51 +655,6 @@ protected:
     va_end(args);
 
     return buf;
-  }
-
-  // return values must be free()d later
-  char *human_readable_filesize(long bytes)
-  {
-    long sK, sM, sG, sT;
-    long double ld = bytes;
-    EStrSize idx = STR_SIZE_BYTES;
-
-    if (use_iec_) {
-      sK = 1024;
-      sM = 1024 * sK;
-      sG = 1024 * sM;
-      sT = 1024 * sG;
-    } else {
-      sK = 1000;
-      sM = 1000 * sK;
-      sG = 1000 * sM;
-      sT = 1000 * sG;
-    }
-
-    if (bytes >= 0 && bytes < sK) {
-      // bytes
-      return printf_alloc(filesize_label_[STR_SIZE_BYTES][use_iec_].c_str(), bytes);
-    } else if (bytes >= sK && bytes < sM) {
-      // KB
-      idx = STR_SIZE_KBYTES;
-      ld /= sK;
-    } else if (bytes >= sM && bytes < sG) {
-      // MB
-      idx = STR_SIZE_MBYTES;
-      ld /= sM;
-    } else if (bytes >= sG && bytes < sT) {
-      // GB
-      idx = STR_SIZE_GBYTES;
-      ld /= sG;
-    } else if (bytes >= sT) {
-      // TB
-      idx = STR_SIZE_TBYTES;
-      ld /= sT;
-    } else {
-      return printf_alloc(filesize_label_[STR_SIZE_BYTES][use_iec_].c_str(), bytes);
-    }
-
-    return printf_alloc(filesize_label_[idx][use_iec_].c_str(), ld);
   }
 
   char *count_dir_entries(long &count, const char *directory)
@@ -847,6 +809,8 @@ public:
 
     // clear rowdata_ and free entries
     for (const auto e : rowdata_) {
+      if (e.label) free(e.label);
+
       for (int i = 0; i < COL_MAX; ++i) {
         if (e.cols[i] && (i != COL_TYPE || e.type == ENTRY_ALLOCATED)) {
           free(e.cols[i]);
@@ -944,6 +908,51 @@ public:
     }
 
     return path;
+  }
+
+  // return values must be free()d later
+  char *human_readable_filesize(long bytes)
+  {
+    long sK, sM, sG, sT;
+    long double ld = bytes;
+    EStrSize idx = STR_SIZE_BYTES;
+
+    if (use_iec_) {
+      sK = 1024;
+      sM = 1024 * sK;
+      sG = 1024 * sM;
+      sT = 1024 * sG;
+    } else {
+      sK = 1000;
+      sM = 1000 * sK;
+      sG = 1000 * sM;
+      sT = 1000 * sG;
+    }
+
+    if (bytes >= 0 && bytes < sK) {
+      // bytes
+      return printf_alloc(filesize_label_[STR_SIZE_BYTES][use_iec_].c_str(), bytes);
+    } else if (bytes >= sK && bytes < sM) {
+      // KB
+      idx = STR_SIZE_KBYTES;
+      ld /= sK;
+    } else if (bytes >= sM && bytes < sG) {
+      // MB
+      idx = STR_SIZE_MBYTES;
+      ld /= sM;
+    } else if (bytes >= sG && bytes < sT) {
+      // GB
+      idx = STR_SIZE_GBYTES;
+      ld /= sG;
+    } else if (bytes >= sT) {
+      // TB
+      idx = STR_SIZE_TBYTES;
+      ld /= sT;
+    } else {
+      return printf_alloc(filesize_label_[STR_SIZE_BYTES][use_iec_].c_str(), bytes);
+    }
+
+    return printf_alloc(filesize_label_[idx][use_iec_].c_str(), ld);
   }
 
   virtual bool load_dir() {
@@ -1081,6 +1090,19 @@ public:
 
       // name
       row.cols[COL_NAME] = strdup(dir->d_name);
+
+      // look for a newline character
+      char *p = strchr(dir->d_name, '\n');
+
+      // create a second label with an escaped newline
+      if (p) {
+        std::string s = dir->d_name;
+
+        for (size_t pos=0; (pos = s.find('\n', pos)) != std::string::npos; ++pos) {
+          s.replace(pos, 1, "\\n");
+        }
+        row.label = strdup(s.c_str());
+      }
 
       rowdata_.emplace_back(row);
     }
