@@ -562,6 +562,11 @@ public:
 
     load_root();
 
+    // Fl_Tree::open() returns
+    //     -   1 -- OK: item opened
+    //     -   0 -- OK: item was already open, no change
+    //     -  -1 -- ERROR: item was not found
+
     // open subdirectories step by step
     while (*++p) {
       if (*p != '/') continue;
@@ -571,7 +576,13 @@ public:
     }
 
     // finally open the full path
-    return (open(s.data()) != -1);
+    // return false if Fl_Tree::open() failed or if we have no read access
+
+    if (open(s.c_str()) == -1 || access(s.c_str(), R_OK) == -1) {
+      return false;
+    }
+
+    return true;
   }
 
   // same as load_dir("/")

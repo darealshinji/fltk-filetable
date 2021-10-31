@@ -180,11 +180,14 @@ private:
   std::string data_[xdg::LAST + 1]; // XDG dirs + $HOME
   uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
 
-  enum { HISTORY_MAX = 10 };
+  enum {
+    HISTORY_MAX = 10,   // number of history entries
+    SPACING_MAX = 24,   // spacing in pixels
+    UUID_MAX_SIZE = 36  // UUID length
+  };
+
   Fl_Menu_Item mprev_[HISTORY_MAX + 1] = {0};
   Fl_Menu_Item mnext_[HISTORY_MAX + 1] = {0};
-
-  enum { UUID_MAX_SIZE = 36 };
 
   typedef struct {
     std::string dev;
@@ -253,8 +256,8 @@ private:
     {
       case FL_TREE_REASON_RESELECTED:
       case FL_TREE_REASON_SELECTED:
-        if (!load_dir(tree_->callback_item_path())) {
-          tree_->open_callback_item();  // sets the item as "no access"
+        if (tree_->load_dir(tree_->callback_item_path())) {
+          load_dir(tree_->callback_item_path(), false);
         }
         break;
 
@@ -587,7 +590,7 @@ private:
   // load currently open directory in tree_
   // or load the directory that was set with set_dir()
   // in tree_ and table_
-  bool load_open_directory(bool keep_history=false)
+  bool load_open_directory(bool keep_history, bool update_tree)
   {
     // update menu first
     add_partitions();
@@ -607,34 +610,40 @@ private:
 
     const char *dir = table_->open_directory();
     addr_->value(dir);
-    tree_->close_root();
-
+    if (update_tree) tree_->close_root();
     if (!dir) return false;
 
-    // update tree_
-    bool rv = tree_->load_dir(dir);
-    if (rv) tree_->calc_tree();
+    bool rv = true;
 
-    if (table_->open_directory_is_root()) {
-      b_up->deactivate();
-      tree_->hposition(0);
-      tree_->vposition(0);
-      tree_->set_item_focus(tree_->root());
+    if (update_tree) {
+      rv = tree_->load_dir(dir);
+      if (rv) tree_->calc_tree();
+
+      if (table_->open_directory_is_root()) {
+        b_up->deactivate();
+        tree_->hposition(0);
+        tree_->vposition(0);
+        tree_->set_item_focus(tree_->root());
+      } else {
+        b_up->activate();
+        // scroll down tree
+        if (rv) {
+          auto item = tree_->find_item(dir);
+          tree_->show_item(item);
+          tree_->set_item_focus(item);
+        }
+      }
     } else {
-      b_up->activate();
-      // scroll down tree
-      if (rv) {
-        auto item = tree_->find_item(dir);
-        tree_->show_item(item);
-        tree_->set_item_focus(item);
+      if (table_->open_directory_is_root()) {
+        b_up->deactivate();
+      } else {
+        b_up->activate();
       }
     }
 
-    if (vprev_.size() == 0 || prev_.compare(dir) == 0) {
+    if (keep_history || vprev_.size() == 0 || prev_.compare(dir) == 0) {
       return rv;
     }
-
-    if (keep_history) return rv;
 
     // add previous directory to the history list
 
@@ -821,7 +830,7 @@ public:
     vnext_.reserve(HISTORY_MAX);
 
     if (spacing < 0) spacing = 0;
-    if (spacing > 24) spacing = 24;
+    if (spacing > SPACING_MAX) spacing = SPACING_MAX;
 
     // get username
     passwd *pw = getpwuid(geteuid());
@@ -842,36 +851,45 @@ public:
       const int but_y = addr_->y() + addr_->h() + spacing;
 
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
+      const Fl_Widget *o = b_places;
 
-      b_devices = new Fl_Menu_Button(b_places->x() + b_places->w(), but_y, 82, but_h, "Devices");
+      b_devices = new Fl_Menu_Button(o->x() + o->w(), but_y, 82, but_h, "Devices");
       b_devices->deactivate();
+      o = b_devices;
 
-      b_up = new Fl_Button(b_devices->x() + b_devices->w(), but_y, but_h, but_h, "@+78->");
+      b_up = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+78->");
       b_up->callback(CALLBACK(dir_up()));
+      o = b_up;
 
-      b_reload = new Fl_Button(b_up->x() + b_up->w(), but_y, but_h, but_h, "@+4reload");
+      b_reload = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+4reload");
       b_reload->callback(CALLBACK(refresh()));
+      o = b_reload;
 
-      b_hidden = new Fl_Toggle_Button(b_reload->x() + b_reload->w(), but_y, 60, but_h, "Show\nhidden");
+      b_hidden = new Fl_Toggle_Button(o->x() + o->w(), but_y, 60, but_h, "Show\nhidden");
       b_hidden->callback(CALLBACK(toggle_hidden()));
+      o = b_hidden;
 
-      b_prev = new Fl_Button(b_hidden->x() + b_hidden->w(), but_y, but_h, but_h, "@<|");
+      b_prev = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@<|");
       b_prev->callback(previous_cb, 0);
       b_prev->deactivate();
+      o = b_prev;
 
-      b_list_prev = new Fl_Menu_Button(b_prev->x() + b_prev->w(), but_y, 21, but_h);
+      b_list_prev = new Fl_Menu_Button(o->x() + o->w(), but_y, 21, but_h);
       b_list_prev->menu(reinterpret_cast<Fl_Menu_Item *>(&mprev_));
       b_list_prev->deactivate();
+      o = b_list_prev;
 
-      b_next = new Fl_Button(b_list_prev->x() + b_list_prev->w(), but_y, but_h, but_h, "@|>");
+      b_next = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@|>");
       b_next->callback(next_cb, 0);
       b_next->deactivate();
+      o = b_next;
 
-      b_list_next = new Fl_Menu_Button(b_next->x() + b_next->w(), but_y, 21, but_h);
+      b_list_next = new Fl_Menu_Button(o->x() + o->w(), but_y, 21, but_h);
       b_list_next->menu(reinterpret_cast<Fl_Menu_Item *>(&mnext_));
       b_list_next->deactivate();
+      o = b_list_next;
 
-      g_top_dummy = new Fl_Box(b_list_prev->x() + b_list_prev->w(), but_y, 1, 1);
+      g_top_dummy = new Fl_Box(o->x() + o->w(), but_y, 1, 1);
     }
     g_top->end();
     g_top->resizable(g_top_dummy);
@@ -987,7 +1005,7 @@ public:
   }
 
   // calls load_dir() on table_ and tree_
-  bool load_dir(const char *dirname)
+  bool load_dir(const char *dirname, bool update_tree=true)
   {
     std::string s;
 
@@ -1006,7 +1024,7 @@ public:
 
     add_to_history(s.c_str(), vprev_);
 
-    return load_open_directory();
+    return load_open_directory(false, update_tree);
   }
 
   bool load_dir(const std::string &dirname) {
@@ -1025,7 +1043,7 @@ public:
     if (!table_->dir_up()) move_up_tree();
     add_to_history(s.c_str(), vprev_);
 
-    return load_open_directory();
+    return load_open_directory(false, true);
   }
 
   // go back/forth in history
@@ -1073,7 +1091,7 @@ public:
     update_history();
 
     if (table_->load_dir(curr.c_str())) {
-      load_open_directory(true);
+      load_open_directory(true, true);
     }
   }
 
@@ -1091,7 +1109,7 @@ public:
       add_to_history(s.c_str(), vprev_);
     }
 
-    return load_open_directory();
+    return load_open_directory(false, true);
   }
 
   // alternative to refresh()

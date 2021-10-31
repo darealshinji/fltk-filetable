@@ -33,7 +33,7 @@ int main()
   Fl_Double_Window win(800, 600, "Test");
 
   fltk::fileselection<> sel(4, 4, win.w() - 8, win.h() - 8);
-  sel.set_dir("/home/djcj");  // set directory but don't load it
+  sel.set_dir("/usr/local");  // set directory but don't load it
   sel.load_default_icons();
   //sel.use_iec(false);
   //sel.show_hidden(true);
