@@ -68,6 +68,8 @@
     static_cast<fileselection *>(o->parent()->parent())->x; \
   }
 
+#define PRINT_DEBUG(fmt, ...)  //printf("DEBUG: " fmt, ##__VA_ARGS__)
+
 
 // TODO:
 // * focus issues
@@ -337,6 +339,7 @@ private:
     while ((mnt = getmntent(fp)) != NULL) {
       if (mnt->mnt_dir[0] == '/') {
         automount.push_back(mnt->mnt_dir);
+        PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
       }
     }
 
@@ -372,6 +375,7 @@ private:
       strcpy(dev.uuid, p);
       dev.size = 0;
       dev.fs = this;
+      PRINT_DEBUG("disk by uuid -> %s\n", p);
 
       free(rp);
       devices.push_back(dev);
@@ -382,28 +386,27 @@ private:
 
     // get disk labels
 
-    if ((dp = opendir("/dev/disk/by-label")) == NULL) {
-      return {};
-    }
+    if ((dp = opendir("/dev/disk/by-label")) != NULL) {
+      while ((dir = readdir(dp)) != NULL) {
+        const char *p = dir->d_name;
+        if (p[0] == '.') continue;
 
-    while ((dir = readdir(dp)) != NULL) {
-      const char *p = dir->d_name;
-      if (p[0] == '.') continue;
+        std::string path = "/dev/disk/by-label/";
+        path += p;
 
-      std::string path = "/dev/disk/by-label/";
-      path += p;
+        char *rp = realpath(path.c_str(), NULL);
+        if (!rp) continue;
 
-      char *rp = realpath(path.c_str(), NULL);
-      if (!rp) continue;
+        if (strncmp(rp, "/dev/", 5) != 0) {
+          free(rp);
+          continue;
+        }
 
-      if (strncmp(rp, "/dev/", 5) != 0) {
-        free(rp);
-        continue;
-      }
+        for (auto &e : devices) {
+          if (e.dev.compare(rp) != 0) continue;
 
-      for (auto &e : devices) {
-        if (e.dev.compare(rp) == 0) {
           e.label = e.path = p;
+          PRINT_DEBUG("label -> %s\n", p);
 
           // resolve escape sequences
 
@@ -450,12 +453,12 @@ private:
             }
           }
         }
+
+        free(rp);
       }
 
-      free(rp);
+      closedir(dp);
     }
-
-    closedir(dp);
 
 
     // get "/dev" address of ignored partitions
@@ -468,6 +471,7 @@ private:
         for (const auto &e : automount) {
           if (e.compare(mnt->mnt_dir) == 0) {
             ignored.push_back(mnt->mnt_fsname);
+            PRINT_DEBUG("ignored -> %s\n", mnt->mnt_fsname);
           }
         }
       }
@@ -512,6 +516,7 @@ private:
     // get partition sizes
     for (partition_t &e : devices) {
       std::string s = e.dev;
+      PRINT_DEBUG("dev -> %s\n", e.dev.c_str());
 
       while (isdigit(s.back())) s.pop_back();
       if (s.empty()) continue;
@@ -554,16 +559,16 @@ private:
         e.path.insert(0, s);
       }
 
-      s = e.label.empty() ? e.dev : e.label;
-      char *size = table_->human_readable_filesize(e.size);
+      std::string label = s = e.label.empty() ? e.dev : e.label;
 
-      if (size) {
-        s += " - ";
-        s += size;
-        free(size);
-      }
+      s += " [";
+      s += table_->human_readable_filesize_iec(e.size, false);
+      s += " \\/ ";
+      s += table_->human_readable_filesize_iec(e.size, true);
+      s += ']';
+      PRINT_DEBUG("devices -> %s\n", s.c_str());
 
-      std::string unmount = "Unmount/" + s;
+      std::string unmount = "Unmount/" + label;
       int flags = FL_MENU_INACTIVE;
 
       if (fl_filename_isdir(e.path.c_str())) {
@@ -968,7 +973,7 @@ public:
       }
     }
 
-    add_partitions();
+    //add_partitions();
     end();
     resizable(g_main);
   }

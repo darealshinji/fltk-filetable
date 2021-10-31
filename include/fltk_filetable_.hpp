@@ -55,6 +55,9 @@
 
 // explicitly set focus during draw()?
 
+// read directory in separate thread, in case opening a directory on i.e. an
+// external device takes longer?
+
 namespace fltk
 {
 
@@ -953,6 +956,19 @@ public:
     }
 
     return printf_alloc(filesize_label_[idx][use_iec_].c_str(), ld);
+  }
+
+  // return size in IEC or SI format
+  std::string human_readable_filesize_iec(long bytes, bool force_iec)
+  {
+    bool b = use_iec();  // save
+    use_iec(force_iec);
+    char *size = human_readable_filesize(bytes);
+    use_iec(b);  // restore
+    std::string s = size;
+    free(size);
+    while (isspace(s.back())) s.pop_back();
+    return s;
   }
 
   virtual bool load_dir() {
