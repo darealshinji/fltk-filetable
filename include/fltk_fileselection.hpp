@@ -735,18 +735,24 @@ private:
     Fl::unlock();
   }
 
-  void load_partition(partition_t *part)
+  void load_partition(partition_t *part, bool mount)
   {
     kill_pid();
+
     if (!part) return;
 
     const char *path = part->path.c_str();
+    bool isdir = fl_filename_isdir(path);
 
-    if (fl_filename_isdir(path)) {
+    // is the path already mounted?
+    if (isdir && mount) {
       load_dir(path);
       return;
     }
 
+    // is there nothing to unmount?
+    if (!isdir && !mount) return;
+
     // fork process
     if ((pid_ = fork()) == 0) {
       // redirect output instead of using close()
@@ -755,40 +761,19 @@ private:
       fp = freopen("/dev/null", "w", stderr);
       static_cast<void>(fp);  // silence -Wunused-result
 
-      execlp("gio", "gio", "mount", "-f", "-a", "-d", part->uuid, NULL);
+      if (mount) {
+        execlp("gio", "gio", "mount", "-f", "-a", "-d", part->uuid, NULL);
+      } else {
+        execlp("gio", "gio", "mount", "-f", "-a", "-u", path, NULL);
+      }
+
       _exit(127);
     }
 
     // wait for child process in a separate thread
     if (pid_ > 0) {
+      if (!mount) path = NULL;
       th_ = new std::thread(wait_for_child_process, pid_, this, path);
-    }
-  }
-
-  void unmount_partition(partition_t *part)
-  {
-    kill_pid();
-    if (!part) return;
-
-    const char *path = part->path.c_str();
-
-    if (!fl_filename_isdir(path)) return;
-
-    // fork process
-    if ((pid_ = fork()) == 0) {
-      // redirect output instead of using close()
-      // https://stackoverflow.com/a/33268567/5687704
-      FILE *fp = freopen("/dev/null", "w", stdout);
-      fp = freopen("/dev/null", "w", stderr);
-      static_cast<void>(fp);  // silence -Wunused-result
-
-      execlp("gio", "gio", "mount", "-f", "-a", "-u", path, NULL);
-      _exit(127);
-    }
-
-    // wait for child process in a separate thread
-    if (pid_ > 0) {
-      th_ = new std::thread(wait_for_child_process, pid_, this, static_cast<const char *>(NULL));
     }
   }
 
@@ -805,11 +790,11 @@ private:
   }
 
   static void partition_cb(Fl_Widget *o, void *v) {
-    static_cast<fileselection *>(o->parent()->parent())->load_partition(static_cast<partition_t *>(v));
+    static_cast<fileselection *>(o->parent()->parent())->load_partition(static_cast<partition_t *>(v), true);
   }
 
   static void unmount_cb(Fl_Widget *o, void *v) {
-    static_cast<fileselection *>(o->parent()->parent())->unmount_partition(static_cast<partition_t *>(v));
+    static_cast<fileselection *>(o->parent()->parent())->load_partition(static_cast<partition_t *>(v), false);
   }
 
   int handle(int event)
