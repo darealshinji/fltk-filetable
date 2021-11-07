@@ -199,14 +199,14 @@ private:
   } partition_t;
 
   std::vector<partition_t> partitions_;
-
-  // aquire the list of ignored partitions only once
-  std::vector<std::string> ignoredPartitions_;
+  std::vector<std::string> ignoredPartitions_;  // aquire the list of ignored partitions only once
+  std::vector<std::string> mountedPartitions_;
 
   typedef struct {
     std::string base;
     std::string path;
   } path_t;
+
   std::vector<path_t> vprev_, vnext_;
 
   std::string selection_, load_dir_, prev_;
@@ -547,11 +547,63 @@ private:
   {
     if (!user_ || !b_devices) return;
 
+    auto vec = get_partitions();
+    bool need_update = false;
+
+    // check if partitions data were changed
+    if (vec.size() != partitions_.size()) {
+      need_update = true;
+    } else {
+      for (size_t i = 0; i < partitions_.size(); ++i) {
+        const partition_t &p1 = partitions_.at(i);
+        const partition_t &p2 = vec.at(i);
+
+        if (p1.size != p2.size || p1.dev != p2.dev || p1.label != p2.label ||
+            //p1.path != p2.path ||
+            strcmp(p1.uuid, p2.uuid) != 0)
+        {
+          need_update = true;
+          break;
+        }
+      }
+    }
+
+    // check if mounted directories in "/media/<USER>" have changed
+    if (!need_update) {
+      struct dirent *dir;
+      std::vector<std::string> media;
+
+      std::string path = "/media/";
+      path += user_;
+      DIR *dp = opendir(path.c_str());
+
+      if (!dp) {
+        need_update = true;
+      } else {
+        while ((dir = readdir(dp)) != NULL) {
+          if (dir->d_name) media.push_back(dir->d_name);
+        }
+
+        if (media.size() == mountedPartitions_.size()) {
+          for (size_t i = 0; i < media.size(); ++i) {
+            if (media.at(i) != mountedPartitions_.at(i)) {
+              need_update = true;
+              break;
+            }
+          }
+        } else {
+          need_update = true;
+        }
+
+        mountedPartitions_ = media;
+      }
+    }
+
+    if (!need_update) return;
+
     b_devices->deactivate();
     b_devices->clear();
-    partitions_.clear();
-
-    partitions_ = get_partitions();
+    partitions_ = vec;
 
     for (size_t i = 0; i < partitions_.size(); ++i) {
       partition_t &e = partitions_.at(i);
