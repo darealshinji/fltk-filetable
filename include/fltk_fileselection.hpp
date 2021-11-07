@@ -195,10 +195,13 @@ private:
     char uuid[UUID_MAX_SIZE + 1];
     long long size;  // bytes
     std::string path;
-    fileselection *fs;
+    fileselection *fs;  // *this
   } partition_t;
 
   std::vector<partition_t> partitions_;
+
+  // aquire the list of ignored partitions only once
+  std::vector<std::string> ignoredPartitions_;
 
   typedef struct {
     std::string base;
@@ -330,23 +333,24 @@ private:
     struct mntent *mnt;
     struct dirent *dir;
     std::vector<partition_t> devices;
-    std::vector<std::string> automount, ignored;
+    std::vector<std::string> automount;
 
 
     // read /etc/fstab for ignored automounted partitions
-
-    if ((fp = fopen("/etc/fstab", "r")) == NULL) {
-      return {};
-    }
-
-    while ((mnt = getmntent(fp)) != NULL) {
-      if (mnt->mnt_dir[0] == '/') {
-        automount.push_back(mnt->mnt_dir);
-        PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
+    if (ignoredPartitions_.size() == 0) {
+      if ((fp = fopen("/etc/fstab", "r")) == NULL) {
+        return {};
       }
-    }
 
-    fclose(fp);
+      while ((mnt = getmntent(fp)) != NULL) {
+        if (mnt->mnt_dir[0] == '/') {
+          automount.push_back(mnt->mnt_dir);
+          PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
+        }
+      }
+
+      fclose(fp);
+    }
 
 
     // get disk UUIDs
@@ -465,7 +469,7 @@ private:
 
 
     // get "/dev" address of ignored partitions
-    if (automount.size() > 0) {
+    if (ignoredPartitions_.size() == 0 && automount.size() > 0) {
       if ((fp = fopen("/etc/mtab", "r")) == NULL) {
         return {};
       }
@@ -473,7 +477,7 @@ private:
       while ((mnt = getmntent(fp)) != NULL) {
         for (const auto &e : automount) {
           if (e.compare(mnt->mnt_dir) == 0) {
-            ignored.push_back(mnt->mnt_fsname);
+            ignoredPartitions_.push_back(mnt->mnt_fsname);
             PRINT_DEBUG("ignored -> %s\n", mnt->mnt_fsname);
           }
         }
@@ -484,7 +488,7 @@ private:
 
 
     // remove ignored devices
-    for (auto it = ignored.begin(); it != ignored.end(); ++it) {
+    for (auto it = ignoredPartitions_.begin(); it != ignoredPartitions_.end(); ++it) {
       const std::string &s_ignored = *it;
 
       for (auto it2 = devices.begin(); it2 != devices.end(); ) {
@@ -841,7 +845,9 @@ public:
       user_ = getenv("USER");
     }
 
+
     // top buttons
+
     const int addr_h = FL_NORMAL_SIZE + 12;
     const int but_h = 42;
 
@@ -894,7 +900,9 @@ public:
     g_top->end();
     g_top->resizable(g_top_dummy);
 
+
     // main part with tree and filetable
+
     const int g_bot_h = 34 + spacing;
     const int main_h = H - g_top->h() - g_bot_h;
 
@@ -910,7 +918,9 @@ public:
     }
     g_main->end();
 
+
     // OK/Cancel buttons
+
     const int bot_y = g_main->y() + g_main->h();
 
     g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
@@ -937,7 +947,6 @@ public:
 
     // $HOME
     if (rv != -1) {
-      //data_[0] = { this, xdg.home() };
       data_[0] = xdg.home();
       b_places->add("Home", 0, places_cb, const_cast<char *>(data_[0].c_str()));
     }
