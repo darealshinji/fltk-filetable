@@ -73,7 +73,6 @@
 
 // TODO:
 // * focus issues
-// * make partition/gio stuff optional
 
 
 namespace fltk
@@ -335,6 +334,7 @@ private:
     std::vector<partition_t> devices;
     std::vector<std::string> automount;
 
+    if (!b_devices) return {};
 
     // read /etc/fstab for ignored automounted partitions
     if (ignoredPartitions_.size() == 0) {
@@ -545,7 +545,7 @@ private:
   // add partitions to menu
   void add_partitions()
   {
-    if (!user_ || !b_devices) return;
+    if (!b_devices || !user_) return;
 
     auto vec = get_partitions();
     bool need_update = false;
@@ -804,7 +804,7 @@ private:
   {
     kill_pid();
 
-    if (!part) return;
+    if (!part || !b_devices) return;
 
     const char *path = part->path.c_str();
     bool isdir = fl_filename_isdir(path);
@@ -879,7 +879,7 @@ private:
 public:
 
   // c'tor
-  fileselection(int X, int Y, int W, int H, int spacing=4)
+  fileselection(int X, int Y, int W, int H, bool devices=true, int spacing=4)
   : Fl_Group(X,Y,W,H, NULL)
   {
     vprev_.reserve(HISTORY_MAX);
@@ -911,9 +911,11 @@ public:
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
       const Fl_Widget *o = b_places;
 
-      b_devices = new Fl_Menu_Button(o->x() + o->w(), but_y, 82, but_h, "Devices");
-      b_devices->deactivate();
-      o = b_devices;
+      if (devices) {
+        b_devices = new Fl_Menu_Button(o->x() + o->w(), but_y, 82, but_h, "Devices");
+        b_devices->deactivate();
+        o = b_devices;
+      }
 
       b_up = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+78->");
       b_up->callback(CALLBACK(dir_up()));
