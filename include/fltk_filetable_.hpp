@@ -46,8 +46,8 @@
 
 #include "svg_data.h"
 
-#ifndef FLTK_FMT_INT
-#define FLTK_FMT_INT   "%ld"
+#ifndef FLTK_FMT_LONG
+#define FLTK_FMT_LONG  "%ld"
 #endif
 #ifndef FLTK_FMT_FLOAT
 #define FLTK_FMT_FLOAT "%.1Lf"
@@ -235,11 +235,11 @@ private:
   // labels used for the file sizes
   std::string filesize_label_[STR_SIZE_MAX][2] =
   {
-    { FLTK_FMT_INT   " elements ",
-      FLTK_FMT_INT   " elements " },
+    { FLTK_FMT_LONG  " elements ",
+      FLTK_FMT_LONG  " elements " },
 
-    { FLTK_FMT_INT   " bytes ",
-      FLTK_FMT_INT   " bytes " },
+    { FLTK_FMT_LONG  " bytes ",
+      FLTK_FMT_LONG  " bytes " },
 
     { FLTK_FMT_FLOAT " kB ",
       FLTK_FMT_FLOAT " kiB " },
@@ -1261,7 +1261,7 @@ public:
       case STR_SIZE_ELEMENTS:
         str_unknown_elements_ = format_localization(l, "??");
       case STR_SIZE_BYTES:
-        filesize_label_[idx][use_iec_] = format_localization(l, FLTK_FMT_INT);
+        filesize_label_[idx][use_iec_] = format_localization(l, FLTK_FMT_LONG);
         break;
       default:
         filesize_label_[idx][use_iec_] = format_localization(l, FLTK_FMT_FLOAT);
