@@ -34,6 +34,7 @@
 #include <FL/Fl_Menu_Button.H>
 #include <FL/Fl_Menu_Item.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Tabs.H>
 #include <FL/Fl_Tile.H>
 #include <FL/filename.H>
 
@@ -57,16 +58,12 @@
 #include "fltk_dirtree.hpp"
 #include "fltk_filetable_simple.hpp"
 #include "fltk_filetable_extension.hpp"
+#include "fltk_mountbutton.hpp"
 #include "xdg_dirs.hpp"
 
 #ifdef FLTK_EXPERIMENTAL
 #include "fltk_filetable_magic.hpp"
 #endif
-
-#define CALLBACK(x) \
-  [] (Fl_Widget *o, void *) { \
-    static_cast<fileselection *>(o->parent()->parent())->x; \
-  }
 
 #define PRINT_DEBUG(fmt, ...)  //printf("DEBUG: " fmt, ##__VA_ARGS__)
 
@@ -215,13 +212,15 @@ private:
   pid_t pid_ = -1;
 
   dirtree *tree_;
+  //Fl_Box *places_;
   filetable_sub *table_;
   addressline *addr_;
 
-  Fl_Group *g_top, *g_bot;
+  Fl_Group *g_top, *g_bot, *g_tab1, *g_tab2;
   Fl_Tile *g_main;
+  Fl_Tabs *tabs;
   Fl_Menu_Button *b_devices = NULL;
-  Fl_Menu_Button *b_places, *b_list_prev, *b_list_next;
+  Fl_Menu_Button *b_choice, *b_places, *b_list_prev, *b_list_next;
   Fl_Button *b_up, *b_reload, *b_cancel, *b_prev, *b_next;
   Fl_Return_Button *b_ok;
   Fl_Toggle_Button *b_hidden;
@@ -249,7 +248,7 @@ private:
 
   // check if const char * is empty
   inline static bool empty(const char *val) {
-    return (!val || *val == 0) ? true : false;
+    return (!val || *val == 0);
   }
 
   void tree_callback()
@@ -635,7 +634,7 @@ private:
         flags = 0;
       }
 
-      void *arg = reinterpret_cast<void *>(&partitions_.at(i));
+      void *arg = static_cast<void *>(&partitions_.at(i));
       b_devices->add(unmount.c_str(), 0, unmount_cb, arg, flags);
       b_devices->add(s.c_str(), 0, partition_cb, arg);
     }
@@ -769,10 +768,9 @@ private:
 
   void stop_thread()
   {
-    if (th_) {
-      if (th_->joinable()) th_->join();
-      delete th_;
-    }
+    if (!th_) return;
+    if (th_->joinable()) th_->join();
+    delete th_;
     th_ = NULL;
   }
 
@@ -842,29 +840,44 @@ private:
     }
   }
 
+#define FS_CAST static_cast<fileselection *>(o->parent()->parent())
+
+/*
+#define FS_CAST(PTR_FROM,PTR_TO) \
+  fileselection *PTR_TO = dynamic_cast<fileselection *>(PTR_FROM); \
+  if (!PTR_TO) Fl::fatal("%s:\nfunction %s at line %d: dynamic_cast failed", __FILE__, __func__, __LINE__)
+*/
+/*
+  static void sidebar_cb(Fl_Widget *o, void *v) {
+    static_cast<fileselection *>(o->parent()->parent())->sidebar(static_cast<const char *>(v));
+  }
+  */
+
   static void previous_cb(Fl_Widget *o, long n) {
-    static_cast<fileselection *>(o->parent()->parent())->history(n);
+    FS_CAST->history(n);
   }
 
   static void next_cb(Fl_Widget *o, long n) {
-    static_cast<fileselection *>(o->parent()->parent())->history(n, true);
+    FS_CAST->history(n, true);
   }
 
   static void places_cb(Fl_Widget *o, void *v) {
-    static_cast<fileselection *>(o->parent()->parent())->load_dir(static_cast<const char *>(v));
+    FS_CAST->load_dir(static_cast<const char *>(v));
   }
 
   static void partition_cb(Fl_Widget *o, void *v) {
-    static_cast<fileselection *>(o->parent()->parent())->load_partition(static_cast<partition_t *>(v), true);
+    FS_CAST->load_partition(static_cast<partition_t *>(v), true);
   }
 
   static void unmount_cb(Fl_Widget *o, void *v) {
-    static_cast<fileselection *>(o->parent()->parent())->load_partition(static_cast<partition_t *>(v), false);
+    FS_CAST->load_partition(static_cast<partition_t *>(v), false);
   }
+
+#undef FS_CAST
 
   int handle(int event)
   {
-    if (event == FL_NO_EVENT) return 1;
+    //if (event == FL_NO_EVENT) return 1;
 
     // OK button activation
     if (table_->selected()) {
@@ -877,6 +890,12 @@ private:
   }
 
 public:
+
+#define CALLBACK(MEMB) \
+  [] (Fl_Widget *o, void *v) { \
+    fileselection *fs = reinterpret_cast<fileselection *>(v); \
+    fs->MEMB; \
+  }
 
   // c'tor
   fileselection(int X, int Y, int W, int H, bool devices=true, int spacing=4)
@@ -905,11 +924,20 @@ public:
 
     g_top = new Fl_Group(X, Y, W, addr_h + but_h + spacing*2);
     {
+      Fl_Widget *o;
+
       addr_ = new addressline(X, Y, W, addr_h);
       const int but_y = addr_->y() + addr_->h() + spacing;
 
+/*
+      b_choice = new Fl_Menu_Button(X, but_y, 72, but_h, "Tree");
+      b_choice->add("Tree", 0, sidebar_cb, const_cast<char *>("Tree"));
+      b_choice->add("Places", 0, sidebar_cb, const_cast<char *>("Places"));
+      o = b_choice;
+      */
+
       b_places = new Fl_Menu_Button(X, but_y, 72, but_h, "Places");
-      const Fl_Widget *o = b_places;
+      o = b_places;
 
       if (devices) {
         b_devices = new Fl_Menu_Button(o->x() + o->w(), but_y, 82, but_h, "Devices");
@@ -918,15 +946,15 @@ public:
       }
 
       b_up = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+78->");
-      b_up->callback(CALLBACK(dir_up()));
+      b_up->callback(CALLBACK(dir_up()), this);
       o = b_up;
 
       b_reload = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+4reload");
-      b_reload->callback(CALLBACK(refresh()));
+      b_reload->callback(CALLBACK(refresh()), this);
       o = b_reload;
 
       b_hidden = new Fl_Toggle_Button(o->x() + o->w(), but_y, 60, but_h, "Show\nhidden");
-      b_hidden->callback(CALLBACK(toggle_hidden()));
+      b_hidden->callback(CALLBACK(toggle_hidden()), this);
       o = b_hidden;
 
       b_prev = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@<|");
@@ -962,9 +990,37 @@ public:
 
     g_main = new Fl_Tile(X, Y + g_top->h(), W, main_h);
     {
+      // background for tabs - needed so that tile resizing looks clean
+      new Fl_Box(FL_FLAT_BOX, X, g_main->y(), W/4, main_h, NULL);
+
+      tabs = new Fl_Tabs(X, g_main->y(), W/4, main_h);
+      {
+        g_tab1 = new Fl_Group(X, tabs->y() + 20, W/4, main_h - 20, "Tree");
+        {
+          tree_ = new dirtree(g_tab1->x(), g_tab1->y(), g_tab1->w(), g_tab1->h());
+          tree_->callback(CALLBACK(tree_callback()), this);
+          tree_->selection_color(FL_WHITE);
+        }
+        g_tab1->end();
+
+        g_tab2 = new Fl_Group(g_tab1->x(), g_tab1->y(), g_tab1->w(), g_tab1->h(), "Places");
+        {
+          //new Fl_Box(FL_FLAT_BOX, g_tab2->x(), g_tab2->y(), g_tab2->w(), g_tab2->h(), NULL);
+        }
+        g_tab2->end();
+      }
+      tabs->clear_visible_focus();
+      tabs->end();
+
+
+    /*
       tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
       tree_->callback(CALLBACK(tree_callback()));
       tree_->selection_color(FL_WHITE);
+
+      places_ = new Fl_Box(FL_FLAT_BOX, X, Y + g_top->h(), W/4, main_h, "Places...");
+      places_->hide();
+    */
 
       table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
 
@@ -980,11 +1036,11 @@ public:
     g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
     {
       b_ok = new Fl_Return_Button(X + W - 90, bot_y + spacing, 90, g_bot_h - spacing, "OK");
-      b_ok->callback(CALLBACK(double_click_callback()));
+      b_ok->callback(CALLBACK(double_click_callback()), this);
       b_ok->deactivate();
 
       b_cancel = new Fl_Button(X + W - 180 - spacing, bot_y + spacing, 90, g_bot_h - spacing, "Cancel");
-      b_cancel->callback(CALLBACK(cancel()));
+      b_cancel->callback(CALLBACK(cancel()), this);
 
       g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + spacing, 1, 1);
     }
@@ -1043,6 +1099,8 @@ public:
     end();
     resizable(g_main);
   }
+
+#undef CALLBACK
 
   // d'tor
   virtual ~fileselection()
@@ -1157,6 +1215,33 @@ public:
       load_open_directory(true, true);
     }
   }
+
+/*
+  // set sidebar type by label
+  void sidebar(const char *l)
+  {
+    if (empty(l)) return;
+
+    switch (l[0]) {
+      case 'P':  // Places
+        tree_->hide();
+        places_->show();
+        b_choice->label(l);
+        break;
+
+      case 'T':  // Tree
+        places_->hide();
+        tree_->show();
+        b_choice->label(l);
+        break;
+
+      // Image preview, file info... ?
+
+      default:
+        break;
+    }
+  }
+*/
 
   // reload directory
   bool refresh()
