@@ -53,6 +53,9 @@
 #define FLTK_FMT_FLOAT "%.1Lf"
 #endif
 
+#define DEBUG_PRINT(...) /**/
+//#define DEBUG_PRINT(FMT, ...)  printf("%s -> %s: " FMT, __FILE__, __FUNCTION__, __VA_ARGS__);
+
 // explicitly set focus during draw()?
 
 // read directory in separate thread, in case opening a directory on i.e. an
@@ -281,7 +284,9 @@ private:
         sort_column(col);
         last_row_sorted_ = col;
       }
+
       last_row_clicked_ = -1;
+      DEBUG_PRINT("%s\n", "last_row_clicked_ set to -1");
     }
   }
 
@@ -474,6 +479,7 @@ protected:
           if (row_selected(R)) {
             blend = icon_blend_[1];
             bgcol = selection_color();
+            //draw_focus() ???
           }
 
           int fw = 0;
@@ -603,12 +609,14 @@ protected:
             Fl::remove_timeout(reset_timelimit_cb);
             within_double_click_timelimit_ = true;
             Fl::add_timeout(dc_timeout_, reset_timelimit_cb);
+            last_row_clicked_ = callback_row();
+            DEBUG_PRINT("(CONTEXT_CELL) last_row_clicked_ set to %d\n", callback_row());
           }
-          last_row_clicked_ = callback_row();
 
           //int rX, rY, rW, rH;
           //find_cell(CONTEXT_CELL, last_row_clicked_, 0, rX, rY, rW, rH);
-          //draw_focus(box(), rX, rY, w(), rH);
+          //printf("draw_focus() %d, %d, %d, %d\n", rX, rY, rW, rH);
+          //draw_focus(FL_ENGRAVED_FRAME, rX, rY, 50, 50);
         }
         break;
 
@@ -616,6 +624,11 @@ protected:
         // "outside" area -> clear selection
         select_all_rows(0);
         last_row_clicked_ = -1;
+        DEBUG_PRINT("%s\n", "(CONTEXT_TABLE) last_row_clicked_ set to -1");
+
+        // change context to prevent a pointless loop when we're
+        // just hovering with the mouse above the table
+        do_callback(CONTEXT_NONE, 0, 0);
         //FALLTHROUGH
 
       default:
@@ -824,6 +837,7 @@ public:
     rowdata_.clear();
 
     last_row_clicked_ = -1;
+    DEBUG_PRINT("%s\n", "last_row_clicked_ set to -1");
     check_icons_ = true;
   }
 

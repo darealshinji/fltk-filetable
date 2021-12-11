@@ -65,7 +65,7 @@
 #include "fltk_filetable_magic.hpp"
 #endif
 
-#define PRINT_DEBUG(fmt, ...)  //printf("DEBUG: " fmt, ##__VA_ARGS__)
+#define PRINT_DEBUG(fmt, ...)  printf("DEBUG: " fmt, __VA_ARGS__)
 
 
 // TODO:
@@ -212,9 +212,10 @@ private:
   pid_t pid_ = -1;
 
   dirtree *tree_;
-  //Fl_Box *places_;
   filetable_sub *table_;
   addressline *addr_;
+  mountbutton *mnt_but1;
+  Fl_Box *mnt_dummy;
 
   Fl_Group *g_top, *g_bot, *g_tab1, *g_tab2;
   Fl_Tile *g_main;
@@ -228,7 +229,7 @@ private:
 
 protected:
 
-  virtual void double_click_callback()
+  void double_click_callback()
   {
     if (!table_->selected()) {
       // called by other means than a double click (i.e. button)
@@ -344,7 +345,7 @@ private:
       while ((mnt = getmntent(fp)) != NULL) {
         if (mnt->mnt_dir[0] == '/') {
           automount.push_back(mnt->mnt_dir);
-          PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
+          //PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
         }
       }
 
@@ -381,7 +382,7 @@ private:
       strcpy(dev.uuid, p);
       dev.size = 0;
       dev.fs = this;
-      PRINT_DEBUG("disk by uuid -> %s\n", p);
+      //PRINT_DEBUG("disk by uuid -> %s\n", p);
 
       free(rp);
       devices.push_back(dev);
@@ -412,7 +413,7 @@ private:
           if (e.dev.compare(rp) != 0) continue;
 
           e.label = e.path = p;
-          PRINT_DEBUG("label -> %s\n", p);
+          //PRINT_DEBUG("label -> %s\n", p);
 
           // resolve escape sequences
 
@@ -477,7 +478,7 @@ private:
         for (const auto &e : automount) {
           if (e.compare(mnt->mnt_dir) == 0) {
             ignoredPartitions_.push_back(mnt->mnt_fsname);
-            PRINT_DEBUG("ignored -> %s\n", mnt->mnt_fsname);
+            //PRINT_DEBUG("ignored -> %s\n", mnt->mnt_fsname);
           }
         }
       }
@@ -522,7 +523,7 @@ private:
     // get partition sizes
     for (partition_t &e : devices) {
       std::string s = e.dev;
-      PRINT_DEBUG("dev -> %s\n", e.dev.c_str());
+      //PRINT_DEBUG("dev -> %s\n", e.dev.c_str());
 
       while (isdigit(s.back())) s.pop_back();
       if (s.empty()) continue;
@@ -624,7 +625,7 @@ private:
       s += " \\/ ";
       s += table_->human_readable_filesize_iec(e.size, true);
       s += ']';
-      PRINT_DEBUG("devices -> %s\n", s.c_str());
+      //PRINT_DEBUG("devices -> %s\n", s.c_str());
 
       std::string unmount = "Unmount/" + label;
       int flags = FL_MENU_INACTIVE;
@@ -875,9 +876,18 @@ private:
 
 #undef FS_CAST
 
+  static void mnt_but_cb(Fl_Widget *o, void *) {
+    mountbutton *bt = static_cast<mountbutton *>(o);
+    if (!bt->overlay()) bt->overlay(true);
+  }
+
+  static void mnt_ov_cb(Fl_Widget *o, void *) {
+    static_cast<mountbutton *>(o)->overlay(false);
+  }
+
   int handle(int event)
   {
-    //if (event == FL_NO_EVENT) return 1;
+    if (event == FL_NO_EVENT) return 1;
 
     // OK button activation
     if (table_->selected()) {
@@ -1005,22 +1015,18 @@ public:
 
         g_tab2 = new Fl_Group(g_tab1->x(), g_tab1->y(), g_tab1->w(), g_tab1->h(), "Places");
         {
-          //new Fl_Box(FL_FLAT_BOX, g_tab2->x(), g_tab2->y(), g_tab2->w(), g_tab2->h(), NULL);
+          mnt_but1 = new mountbutton(g_tab2->x() + 2, g_tab2->y() + 2, g_tab2->w() - 4, 24, "Partition");
+          mnt_but1->box(FL_BORDER_BOX);
+          mnt_but1->callback(mnt_but_cb);
+          mnt_but1->callback_overlay(mnt_ov_cb);
+
+          mnt_dummy = new Fl_Box(mnt_but1->x(), mnt_but1->y() + mnt_but1->h(), 1, 1);
         }
+        g_tab2->resizable(mnt_dummy);
         g_tab2->end();
       }
-      tabs->clear_visible_focus();
+      //tabs->clear_visible_focus();
       tabs->end();
-
-
-    /*
-      tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
-      tree_->callback(CALLBACK(tree_callback()));
-      tree_->selection_color(FL_WHITE);
-
-      places_ = new Fl_Box(FL_FLAT_BOX, X, Y + g_top->h(), W/4, main_h, "Places...");
-      places_->hide();
-    */
 
       table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
 

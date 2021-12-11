@@ -1,5 +1,0 @@
-fileselection:
-Double clicking a directory opens the it but doesn't seem to
-update table_ completely. The OK button is still activated and pressing it
-triggers a double click on the entry number of the previous double click.
-If this entry number is not present the program crashes.

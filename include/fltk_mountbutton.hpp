@@ -47,7 +47,7 @@ private:
 
   public:
     bt(int X, int Y, int W, int H, const char *L=NULL)
-    : Fl_Box(FL_NO_BOX, X, Y, W, H, L) {}
+    : Fl_Box(X, Y, W, H, L) {}
 
     virtual ~bt() {}
 
@@ -70,6 +70,7 @@ private:
   };
 
   bt *b_, *ov_;
+  Fl_Box *bg_;
   Fl_Callback *cb_ = NULL, *ov_cb_ = NULL;
   void *cb_data_ = NULL, *ov_cb_data_ = NULL;
 
@@ -77,8 +78,12 @@ public:
   mountbutton(int X, int Y, int W, int H, const char *L=NULL)
   : Fl_Group(X,Y,W,H, NULL)
   {
+    // background
+    bg_ = new Fl_Box(X, Y, W, H, NULL);
+
     // button
     b_ = new bt(X, Y, W-24, H, L);
+    //b_->box(FL_BORDER_BOX);
     b_->align(FL_ALIGN_INSIDE|FL_ALIGN_LEFT);
 
     // overlay
@@ -90,11 +95,8 @@ public:
 
   virtual ~mountbutton() {}
 
-  int color() { return b_->color(); }
-  void color(int c) {
-    b_->color(c);
-    ov_->color(c);
-  }
+  int color() { return bg_->color(); }
+  void color(int c) { bg_->color(c); }
 
   Fl_Callback *callback() { return b_->callback(); }
   void callback(Fl_Callback *cb, void *data=NULL)
@@ -119,7 +121,7 @@ public:
   void overlay(bool b)
   {
     if (b) {
-      ov_->label("@-28|>");
+      ov_->label("@-18|>");
       ov_->callback(ov_cb_, ov_cb_data_);
     } else {
       ov_->label(NULL);
@@ -127,11 +129,8 @@ public:
     }
   }
 
-  Fl_Boxtype box() { return b_->box(); }
-  void box(Fl_Boxtype b) {
-    b_->box(b);
-    ov_->box(b);
-  }
+  Fl_Boxtype box() { return bg_->box(); }
+  void box(Fl_Boxtype b) { bg_->box(b); }
 
   int labelsize() { return b_->labelsize(); }
   void labelsize(int i) {
