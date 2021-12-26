@@ -604,6 +604,7 @@ private:
     b_devices->deactivate();
     b_devices->clear();
     partitions_ = vec;
+    bool mounted = false;
 
     for (size_t i = 0; i < partitions_.size(); ++i) {
       partition_t &e = partitions_.at(i);
@@ -618,7 +619,8 @@ private:
         e.path.insert(0, s);
       }
 
-      std::string label = s = e.label.empty() ? e.dev : e.label;
+      std::string unmount = s = e.label.empty() ? e.dev : e.label;
+      unmount.insert(0, "Unmount/");
 
       s += " [";
       s += table_->human_readable_filesize_iec(e.size, false);
@@ -627,17 +629,22 @@ private:
       s += ']';
       //PRINT_DEBUG("devices -> %s\n", s.c_str());
 
-      std::string unmount = "Unmount/" + label;
       int flags = FL_MENU_INACTIVE;
 
       if (fl_filename_isdir(e.path.c_str())) {
         s.insert(0, "*");
         flags = 0;
+        mounted = true;
       }
 
       void *arg = static_cast<void *>(&partitions_.at(i));
       b_devices->add(unmount.c_str(), 0, unmount_cb, arg, flags);
       b_devices->add(s.c_str(), 0, partition_cb, arg);
+    }
+
+    if (!mounted) {
+      b_devices->clear_submenu(0);
+      b_devices->mode(0, FL_SUBMENU|FL_MENU_INACTIVE);
     }
 
     if (partitions_.size() > 0) b_devices->activate();
@@ -1000,6 +1007,7 @@ public:
 
     g_main = new Fl_Tile(X, Y + g_top->h(), W, main_h);
     {
+/*
       // background for tabs - needed so that tile resizing looks clean
       new Fl_Box(FL_FLAT_BOX, X, g_main->y(), W/4, main_h, NULL);
 
@@ -1027,6 +1035,11 @@ public:
       }
       //tabs->clear_visible_focus();
       tabs->end();
+*/
+
+      tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
+      tree_->callback(CALLBACK(tree_callback()), this);
+      tree_->selection_color(FL_WHITE);
 
       table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
 
