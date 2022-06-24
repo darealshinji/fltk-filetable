@@ -59,7 +59,7 @@ private:
     char *p = strrchr(r.cols[COL_NAME], '.');
 
     // error || dot is first char || dot is last char
-    if (!p || p == r.cols[COL_NAME] || ++p == 0) {
+    if (!p || p == r.cols[COL_NAME] || *(p+1) == 0) {
       return icn_[ICN_FILE];
     }
 

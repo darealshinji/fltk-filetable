@@ -512,7 +512,7 @@ public:
       return false;
     }
 
-    char *buf = static_cast<char *>(malloc(strlen(list) + 2));
+    char *buf = static_cast<char *>(malloc(strlen(list) + 3));
     char *p = buf;
 
     if (*list != ';') {
@@ -562,7 +562,7 @@ public:
 
     ext_t ext;
     ext.desc = description;
-    ext.list = static_cast<char *>(realloc(buf, strlen(buf)));
+    ext.list = static_cast<char *>(realloc(buf, strlen(buf) + 1));
     ext.svg = svg;
 
     icn_custom_.emplace_back(ext);

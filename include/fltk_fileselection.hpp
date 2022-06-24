@@ -337,11 +337,7 @@ private:
     if (!b_devices) return {};
 
     // read /etc/fstab for ignored automounted partitions
-    if (ignoredPartitions_.size() == 0) {
-      if ((fp = fopen("/etc/fstab", "r")) == NULL) {
-        return {};
-      }
-
+    if (ignoredPartitions_.size() == 0 && (fp = fopen("/etc/fstab", "r") != NULL) {
       while ((mnt = getmntent(fp)) != NULL) {
         if (mnt->mnt_dir[0] == '/') {
           automount.push_back(mnt->mnt_dir);
@@ -469,11 +465,9 @@ private:
 
 
     // get "/dev" address of ignored partitions
-    if (ignoredPartitions_.size() == 0 && automount.size() > 0) {
-      if ((fp = fopen("/etc/mtab", "r")) == NULL) {
-        return {};
-      }
-
+    if (ignoredPartitions_.size() == 0 && automount.size() > 0
+      && (fp = fopen("/etc/mtab", "r")) != NULL)
+    {
       while ((mnt = getmntent(fp)) != NULL) {
         for (const auto &e : automount) {
           if (e.compare(mnt->mnt_dir) == 0) {

@@ -610,7 +610,7 @@ protected:
             within_double_click_timelimit_ = true;
             Fl::add_timeout(dc_timeout_, reset_timelimit_cb);
             last_row_clicked_ = callback_row();
-            DEBUG_PRINT("(CONTEXT_CELL) last_row_clicked_ set to %d\n", callback_row());
+            DEBUG_PRINT("(CONTEXT_CELL) last_row_clicked_ set to %d\n", last_row_clicked_);
           }
 
           //int rX, rY, rW, rH;
@@ -725,15 +725,13 @@ protected:
   // filename filter (always returns true if no filter was set)
   virtual bool filter_show_entry(const char *filename)
   {
-    size_t len;
-
     if (filter_list_.empty()) {
       return true;
     }
 
-    if (!filename || (len = strlen(filename)) == 0) {
-      return false;
-    }
+    if (empty(filename)) return false;
+
+    const size_t len = strlen(filename);
 
     for (const std::string &ext : filter_list_) {
       if (ext.size() >= len) {
