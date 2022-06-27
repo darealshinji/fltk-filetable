@@ -96,7 +96,7 @@ public:
       if (icn_[i]) delete icn_[i];
     }
 
-    for (const auto e : icn_custom_) {
+    for (const auto &e : icn_custom_) {
       if (e.svg) delete e.svg;
     }
   }

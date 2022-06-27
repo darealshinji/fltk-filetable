@@ -822,7 +822,7 @@ public:
     Fl_Table_Row::clear();
 
     // clear rowdata_ and free entries
-    for (const auto e : rowdata_) {
+    for (const auto &e : rowdata_) {
       if (e.label) free(e.label);
 
       for (int i = 0; i < COL_MAX; ++i) {
@@ -917,7 +917,7 @@ public:
 
     path = "";
 
-    for (const auto elem : vec) {
+    for (const auto &elem : vec) {
       path.push_back('/');
       path.append(elem);
     }

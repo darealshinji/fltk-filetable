@@ -337,15 +337,18 @@ private:
     if (!b_devices) return {};
 
     // read /etc/fstab for ignored automounted partitions
-    if (ignoredPartitions_.size() == 0 && (fp = fopen("/etc/fstab", "r") != NULL) {
-      while ((mnt = getmntent(fp)) != NULL) {
-        if (mnt->mnt_dir[0] == '/') {
-          automount.push_back(mnt->mnt_dir);
-          //PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
+    if (ignoredPartitions_.size() == 0) {
+      fp = fopen("/etc/fstab", "r");
+      if (fp) {
+        while ((mnt = getmntent(fp)) != NULL) {
+          if (mnt->mnt_dir[0] == '/') {
+            automount.push_back(mnt->mnt_dir);
+            //PRINT_DEBUG("automount -> %s\n", mnt->mnt_dir);
+          }
         }
-      }
 
-      fclose(fp);
+        fclose(fp);
+      }
     }
 
 
@@ -777,7 +780,7 @@ private:
   }
 
   // thread waiting for child to exit and return status
-  static void wait_for_child_process(pid_t pid, fileselection *o, const char *path)
+  static void wait_for_child_process(pid_t pid, fileselection *o, partition_t *part)
   {
     int status = 0;
     int rv = -1;
@@ -791,10 +794,60 @@ private:
     // successfully mounted
     Fl::lock();
 
-    if (empty(path))  {
+    if (!part || empty(part->path.c_str()))  {
       o->refresh();
     } else {
-      o->load_dir(path);
+      // be pedantic and do an extra check on /proc/self/mounts to get the right path
+      FILE *fp = fopen("/proc/self/mounts", "r");
+
+      if (fp) {
+        char *line = NULL;
+        size_t len = 0;
+        ssize_t nread;
+        const std::string s = "/dev/" + part->dev + " ";
+
+        while ((nread = getline(&line, &len, fp)) != -1) {
+          if (strncmp(line, s.c_str(), s.size()) != 0) {
+            continue;
+          }
+
+          char *path = line + s.size();
+          char *p = strchr(path, ' ');
+          if (!p) continue;
+          *p = 0;
+
+          part->path.reserve(strlen(path));
+          part->path = "";
+
+          for (p = path; *p != 0; p++) {
+            if (*p == '\\' && strlen(p) > 3) {
+              // resolve octal escape sequences
+              int n;
+              char buf[4];
+              buf[0] = p[1];
+              buf[1] = p[2];
+              buf[2] = p[3];
+              buf[3] = 0;
+
+              if (sscanf(buf, "%o", &n) == 1 && n > 0 && n < 256) {
+                part->path.push_back(static_cast<char>(n));
+                p += 3;
+                continue;
+              }
+            }
+
+            part->path.push_back(*p);
+          }
+
+          //PRINT_DEBUG("path read from /proc/self/mounts is `%s'\n", part->path.c_str());
+          break;
+        }
+
+        free(line);
+        fclose(fp);
+      }
+
+      o->load_dir(part->path.c_str());
     }
 
     Fl::unlock();
@@ -806,12 +859,11 @@ private:
 
     if (!part || !b_devices) return;
 
-    const char *path = part->path.c_str();
-    bool isdir = fl_filename_isdir(path);
+    bool isdir = fl_filename_isdir(part->path.c_str());
 
     // is the path already mounted?
     if (isdir && mount) {
-      load_dir(path);
+      load_dir(part->path.c_str());
       return;
     }
 
@@ -829,7 +881,7 @@ private:
       if (mount) {
         execlp("gio", "gio", "mount", "-f", "-a", "-d", part->uuid, NULL);
       } else {
-        execlp("gio", "gio", "mount", "-f", "-a", "-u", path, NULL);
+        execlp("gio", "gio", "mount", "-f", "-a", "-u", part->path.c_str(), NULL);
       }
 
       _exit(127);
@@ -837,8 +889,8 @@ private:
 
     // wait for child process in a separate thread
     if (pid_ > 0) {
-      if (!mount) path = NULL;
-      th_ = new std::thread(wait_for_child_process, pid_, this, path);
+      //PRINT_DEBUG("gio mount -f -a -%c %s\n", mount ? 'd' : 'u', mount ? part->uuid : part->path.c_str());
+      th_ = new std::thread(wait_for_child_process, pid_, this, mount ? part : nullptr);
     }
   }
 
