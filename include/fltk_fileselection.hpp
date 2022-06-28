@@ -780,7 +780,7 @@ private:
   }
 
   // thread waiting for child to exit and return status
-  static void wait_for_child_process(pid_t pid, fileselection *o, partition_t *part)
+  void wait_for_child_process(pid_t pid, partition_t *part)
   {
     int status = 0;
     int rv = -1;
@@ -792,10 +792,9 @@ private:
     if (rv != 0) return;
 
     // successfully mounted
-    Fl::lock();
-
     if (!part || empty(part->path.c_str()))  {
-      o->refresh();
+      Fl::lock();
+      refresh();
     } else {
       // be pedantic and do an extra check on /proc/self/mounts to get the right path
       FILE *fp = fopen("/proc/self/mounts", "r");
@@ -847,7 +846,8 @@ private:
         fclose(fp);
       }
 
-      o->load_dir(part->path.c_str());
+      Fl::lock();
+      load_dir(part->path.c_str());
     }
 
     Fl::unlock();
@@ -883,14 +883,14 @@ private:
       } else {
         execlp("gio", "gio", "mount", "-f", "-a", "-u", part->path.c_str(), NULL);
       }
-
       _exit(127);
     }
 
     // wait for child process in a separate thread
     if (pid_ > 0) {
-      //PRINT_DEBUG("gio mount -f -a -%c %s\n", mount ? 'd' : 'u', mount ? part->uuid : part->path.c_str());
-      th_ = new std::thread(wait_for_child_process, pid_, this, mount ? part : nullptr);
+      partition_t *ptr = mount ? part : nullptr;
+      // pid_ doesn't need to be or rather cannot be captured??
+      th_ = new std::thread([this, ptr](){ this->wait_for_child_process(pid_, ptr); });
     }
   }
 
@@ -954,11 +954,10 @@ private:
 
 public:
 
-#define CALLBACK(MEMB) \
-  [] (Fl_Widget *o, void *v) { \
+#define ADD_CB(MEMB) \
+  callback([] (Fl_Widget *, void *v) { \
     fileselection *fs = reinterpret_cast<fileselection *>(v); \
-    fs->MEMB; \
-  }
+    fs->MEMB(); }, this)
 
   // c'tor
   fileselection(int X, int Y, int W, int H, bool devices=true, int spacing=4)
@@ -1009,15 +1008,15 @@ public:
       }
 
       b_up = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+78->");
-      b_up->callback(CALLBACK(dir_up()), this);
+      b_up->ADD_CB(dir_up);
       o = b_up;
 
       b_reload = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@+4reload");
-      b_reload->callback(CALLBACK(refresh()), this);
+      b_reload->ADD_CB(refresh);
       o = b_reload;
 
       b_hidden = new Fl_Toggle_Button(o->x() + o->w(), but_y, 60, but_h, "Show\nhidden");
-      b_hidden->callback(CALLBACK(toggle_hidden()), this);
+      b_hidden->ADD_CB(toggle_hidden);
       o = b_hidden;
 
       b_prev = new Fl_Button(o->x() + o->w(), but_y, but_h, but_h, "@<|");
@@ -1062,7 +1061,7 @@ public:
         g_tab1 = new Fl_Group(X, tabs->y() + 20, W/4, main_h - 20, "Tree");
         {
           tree_ = new dirtree(g_tab1->x(), g_tab1->y(), g_tab1->w(), g_tab1->h());
-          tree_->callback(CALLBACK(tree_callback()), this);
+          tree_->ADD_CB(tree_callback);
           tree_->selection_color(FL_WHITE);
         }
         g_tab1->end();
@@ -1084,7 +1083,7 @@ public:
 */
 
       tree_ = new dirtree(X, Y + g_top->h(), W/4, main_h);
-      tree_->callback(CALLBACK(tree_callback()), this);
+      tree_->ADD_CB(tree_callback);
       tree_->selection_color(FL_WHITE);
 
       table_ = new filetable_sub(X + W/4, Y + g_top->h(), W - W/4, main_h, this);
@@ -1101,11 +1100,11 @@ public:
     g_bot = new Fl_Group(X, bot_y, W, g_bot_h);
     {
       b_ok = new Fl_Return_Button(X + W - 90, bot_y + spacing, 90, g_bot_h - spacing, "OK");
-      b_ok->callback(CALLBACK(double_click_callback()), this);
+      b_ok->ADD_CB(double_click_callback);
       b_ok->deactivate();
 
       b_cancel = new Fl_Button(X + W - 180 - spacing, bot_y + spacing, 90, g_bot_h - spacing, "Cancel");
-      b_cancel->callback(CALLBACK(cancel()), this);
+      b_cancel->ADD_CB(cancel);
 
       g_bot_dummy = new Fl_Box(b_cancel->x() - 1, bot_y + spacing, 1, 1);
     }
@@ -1165,7 +1164,7 @@ public:
     resizable(g_main);
   }
 
-#undef CALLBACK
+#undef ADD_CB
 
   // d'tor
   virtual ~fileselection()
