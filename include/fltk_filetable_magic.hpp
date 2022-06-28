@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021 djcj <djcj@gmx.de>
+  Copyright (c) 2021-2022 djcj <djcj@gmx.de>
 
   Permission is hereby granted, free of charge, to any person
   obtaining a copy of this software and associated documentation files
@@ -69,24 +69,24 @@ private:
   typedef struct magic_set *magic_t;
 
   // magic_open()
-  typedef magic_t (*open_t) (int);
-  static open_t magic_open;
+  typedef magic_t (*sym_mgcop) (int);
+  static sym_mgcop magic_open;
 
   // magic_close()
-  typedef void (*close_t) (magic_t);
-  static close_t magic_close;
+  typedef void (*sym_mgccl) (magic_t);
+  static sym_mgccl magic_close;
 
   // magic_file()
-  typedef const char *(*file_t) (magic_t, const char *);
-  static file_t magic_file;
+  typedef const char *(*sym_mgcfl) (magic_t, const char *);
+  static sym_mgcfl magic_file;
 
   // magic_error()
-  typedef const char *(*error_t) (magic_t);
-  static error_t magic_error;
+  typedef const char *(*sym_mgcer) (magic_t);
+  static sym_mgcer magic_error;
 
   // magic_load()
-  typedef int (*load_t) (magic_t, const char *);
-  static load_t magic_load;
+  typedef int (*sym_mgcld) (magic_t, const char *);
+  static sym_mgcld magic_load;
 #endif
 
   typedef struct {
@@ -125,19 +125,19 @@ private:
       return false;
     }
 
-    magic_open = reinterpret_cast<open_t>(dlsym(handle_, "magic_open"));
+    magic_open = reinterpret_cast<sym_mgcop>(dlsym(handle_, "magic_open"));
     if (!magic_open) return false;
 
-    magic_close = reinterpret_cast<close_t>(dlsym(handle_, "magic_close"));
+    magic_close = reinterpret_cast<sym_mgccl>(dlsym(handle_, "magic_close"));
     if (!magic_close) return false;
 
-    magic_file = reinterpret_cast<file_t>(dlsym(handle_, "magic_file"));
+    magic_file = reinterpret_cast<sym_mgcfl>(dlsym(handle_, "magic_file"));
     if (!magic_file) return false;
 
-    magic_error = reinterpret_cast<error_t>(dlsym(handle_, "magic_error"));
+    magic_error = reinterpret_cast<sym_mgcer>(dlsym(handle_, "magic_error"));
     if (!magic_error) return false;
 
-    magic_load = reinterpret_cast<load_t>(dlsym(handle_, "magic_load"));
+    magic_load = reinterpret_cast<sym_mgcld>(dlsym(handle_, "magic_load"));
     if (!magic_load) return false;
 
     symbols_loaded_ = true;
@@ -278,7 +278,7 @@ private:
     // full check on other types than "application/"
     std::string s;
     s.reserve(strlen(p) + 2);
-    s.push_back(';');
+    s = ";";
     s.append(p);
     s.push_back(';');
 
@@ -347,7 +347,7 @@ private:
   {
     if (!th_) return;
     request_stop_ = true;
-    th_->join();
+    if (th_->joinable()) th_->join();
     delete th_;
     th_ = NULL;
     request_stop_ = false;
@@ -657,11 +657,11 @@ bool filetable_magic::request_stop_ = false;
 void *filetable_magic::handle_ = NULL;
 bool filetable_magic::symbols_loaded_ = false;
 
-filetable_magic::open_t filetable_magic::magic_open = NULL;
-filetable_magic::close_t filetable_magic::magic_close = NULL;
-filetable_magic::file_t filetable_magic::magic_file = NULL;
-filetable_magic::error_t filetable_magic::magic_error = NULL;
-filetable_magic::load_t filetable_magic::magic_load = NULL;
+filetable_magic::sym_mgcop filetable_magic::magic_open = NULL;
+filetable_magic::sym_mgccl filetable_magic::magic_close = NULL;
+filetable_magic::sym_mgcfl filetable_magic::magic_file = NULL;
+filetable_magic::sym_mgcer filetable_magic::magic_error = NULL;
+filetable_magic::sym_mgcld filetable_magic::magic_load = NULL;
 #endif
 
 } // namespace fltk

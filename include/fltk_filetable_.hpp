@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021 djcj <djcj@gmx.de>
+  Copyright (c) 2021-2022 djcj <djcj@gmx.de>
 
   Permission is hereby granted, free of charge, to any person
   obtaining a copy of this software and associated documentation files
