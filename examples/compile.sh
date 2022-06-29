@@ -28,8 +28,7 @@ fltk_ldflags="$(../build/fltk-config --use-images --ldflags)"
 
 set -x
 
-g++ $fltk_cxxflags $cxxflags -DDLOPEN_MAGIC=1 -o fileselection fileselection.cpp $fltk_ldflags $ldflags
-exit
+g++ $fltk_cxxflags $cxxflags -o fileselection fileselection.cpp $fltk_ldflags $ldflags -lmagic
 g++ $fltk_cxxflags $cxxflags -o tree tree.cpp $fltk_ldflags $ldflags
 g++ $cxxflags print_xdg_dirs.cpp -o print_xdg_dirs $ldflags
 g++ $fltk_cxxflags $cxxflags -o listfiles_magic listfiles_magic.cpp $fltk_ldflags $ldflags -lmagic

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021 djcj <djcj@gmx.de>
+  Copyright (c) 2021-2022 djcj <djcj@gmx.de>
 
   Permission is hereby granted, free of charge, to any person
   obtaining a copy of this software and associated documentation files
@@ -25,6 +25,7 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Double_Window.H>
 
+#define FLTK_EXPERIMENTAL
 #include "fltk_fileselection.hpp"
 
 
@@ -32,7 +33,7 @@ int main()
 {
   Fl_Double_Window win(800, 600, "Test");
 
-  fltk::fileselection<> sel(4, 4, win.w() - 8, win.h() - 8);
+  fltk::fileselection<fltk::filetable_magic> sel(4, 4, win.w() - 8, win.h() - 8);
   sel.set_dir("/usr/local");  // set directory but don't load it
   sel.load_default_icons();
   //sel.use_iec(false);

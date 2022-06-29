@@ -25,9 +25,9 @@
 #ifndef fltk_filetable_magic_hpp
 #define fltk_filetable_magic_hpp
 
-#ifndef FLTK_EXPERIMENTAL
-#error You need to define FLTK_EXPERIMENTAL
-#else
+//#ifndef FLTK_EXPERIMENTAL
+//#error You need to define FLTK_EXPERIMENTAL
+//#else
 
 #include <FL/Fl.H>
 #include <FL/Fl_SVG_Image.H>
@@ -45,9 +45,6 @@
 
 #include "fltk_filetable_.hpp"
 
-
-// add second libmagic thread?
-// Bug: crashes on very fast directory switching
 
 namespace fltk
 {
@@ -109,7 +106,7 @@ private:
   char *filter_mime_;
 
   // set this true to stop the thread immediately
-  static bool request_stop_;
+  bool request_stop_ = false;
 
 #if DLOPEN_MAGIC != 0
   static void *handle_;
@@ -650,13 +647,10 @@ public:
   bool show_mime() const { return show_mime_; }
 };
 
-// initializing static members
-bool filetable_magic::request_stop_ = false;
-
 #if DLOPEN_MAGIC != 0
+// initializing static members
 void *filetable_magic::handle_ = NULL;
 bool filetable_magic::symbols_loaded_ = false;
-
 filetable_magic::sym_mgcop filetable_magic::magic_open = NULL;
 filetable_magic::sym_mgccl filetable_magic::magic_close = NULL;
 filetable_magic::sym_mgcfl filetable_magic::magic_file = NULL;
@@ -666,7 +660,7 @@ filetable_magic::sym_mgcld filetable_magic::magic_load = NULL;
 
 } // namespace fltk
 
-#endif  // FLTK_EXPERIMENTAL
+//#endif  // FLTK_EXPERIMENTAL
 
 #endif  // fltk_filetable_magic_hpp
 
