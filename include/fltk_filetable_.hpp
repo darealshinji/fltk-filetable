@@ -136,6 +136,8 @@ private:
       _mode = mode;
     }
 
+#define COMPARE(A,B) (_reverse?(A>B):(A<B))
+
     bool operator() (Row_t a, Row_t b) {
       if (_col >= COL_MAX) return false;
 
@@ -147,7 +149,7 @@ private:
         if (a.isdir() != b.isdir()) {
           return (a.isdir() && !b.isdir());
         }
-        return _reverse ? a.bytes<b.bytes : b.bytes<a.bytes;
+        return COMPARE(b.bytes, a.bytes);
       }
 
       if (!(_mode & SORT_DIRECTORY_AS_FILE) && a.isdir() != b.isdir()) {
@@ -155,7 +157,7 @@ private:
       }
 
       if (_col == COL_LAST_MOD) {
-        return _reverse ? a.last_mod<b.last_mod : b.last_mod<a.last_mod;
+        return COMPARE(b.last_mod, a.last_mod);
       }
 
       // ignore leading dots in filenames ("bin, .config, data, .local"
@@ -172,18 +174,20 @@ private:
 
         // if numbers are the same, continue to alphabetic sort
         if (av != bv) {
-          return _reverse ? bv < av : av < bv;
+          return COMPARE(av, bv);
         }
       }
 
       // Alphabetic sort
       if (_mode & SORT_IGNORE_CASE) {
-        return _reverse ? strcasecmp(ap, bp) > 0 : strcasecmp(ap, bp) < 0;
+        return COMPARE(strcasecmp(ap, bp), 0);
       }
 
-      return _reverse ? strcmp(ap, bp) > 0 : strcmp(ap, bp) < 0;
+      return COMPARE(strcmp(ap, bp), 0);
     }
   };
+
+#undef COMPARE
 
   // default sort modus
   uint sort_mode_ = SORT_NUMERIC|SORT_IGNORE_CASE|SORT_IGNORE_LEADING_DOT;
