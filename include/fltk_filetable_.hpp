@@ -58,8 +58,6 @@
 
 // explicitly set focus during draw()?
 
-// read directory in separate thread, in case opening a directory on i.e. an
-// external device takes longer?
 
 namespace fltk
 {
@@ -746,10 +744,32 @@ protected:
     return false;
   }
 
+  int window_is_visible() const {
+    return window()->visible();
+  }
+
+#define AW_TIMEOUT_REPEAT 0.1
+
+  // a little "hack" to ensure that autowidth() does its
+  // job correctly after the window is fully visible
+  static void autowidth_timeout_cb(void *v)
+  {
+    filetable_ *o = reinterpret_cast<filetable_ *>(v);
+
+    if (o->window_is_visible()) {
+      Fl::remove_timeout(autowidth_timeout_cb);
+      o->autowidth();
+    } else {
+      Fl::repeat_timeout(AW_TIMEOUT_REPEAT, autowidth_timeout_cb, v);
+    }
+  }
+
   // automatically set column widths to data
   void autowidth()
   {
     int w, h;
+
+    //if (!window()->visible()) return;
 
     fl_font(labelfont(), labelsize());
 
@@ -807,7 +827,11 @@ public:
     callback( [](Fl_Widget *o){ static_cast<filetable_ *>(o)->event_callback(); } );
 
     end();
+
+    Fl::add_timeout(AW_TIMEOUT_REPEAT, autowidth_timeout_cb, this);
   }
+
+#undef AW_TIMEOUT_REPEAT
 
   // d'tor
   virtual ~filetable_()
