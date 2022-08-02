@@ -176,9 +176,7 @@ private:
     if (open_directory_.empty()) {
       p = magic_file(cookie_, r.cols[COL_NAME]);
     } else {
-      std::string s;
-      s.reserve(open_directory_.size() + strlen(r.cols[COL_NAME]) + 1);
-      s = open_directory_ + "/" + r.cols[COL_NAME];
+      std::string s = open_directory_ + "/" + r.cols[COL_NAME];
       p = magic_file(cookie_, s.c_str());
     }
 
@@ -205,7 +203,7 @@ private:
             s += p2;
           }
 
-          for (const auto l : icn_custom_) {
+          for (const auto &l : icn_custom_) {
             if (strstr(l.list, p) || strstr(l.list, s.c_str())) {
               if (show_mime()) {
                 r.cols[COL_TYPE] = strdup(mime);
@@ -279,7 +277,7 @@ private:
     s.append(p);
     s.push_back(';');
 
-    for (const auto l : icn_custom_) {
+    for (const auto &l : icn_custom_) {
       if (strstr(l.list, s.c_str())) {
         if (show_mime()) {
           r.cols[COL_TYPE] = strdup(mime);
@@ -293,7 +291,7 @@ private:
 
     // generic MIME types (check last)
     if (type) {
-      for (const auto l : icn_custom_) {
+      for (const auto &l : icn_custom_) {
         if (strstr(l.list, type)) {
           if (show_mime()) {
             r.cols[COL_TYPE] = strdup(mime);
@@ -397,7 +395,7 @@ public:
       }
     }
 
-    for (const auto e : icn_custom_) {
+    for (const auto &e : icn_custom_) {
       if (e.list) free(e.list);
       if (e.svg) delete e.svg;
     }
@@ -458,18 +456,8 @@ public:
     return load_dir(dir.c_str());
   }
 
-  // same as the parent class double_click_callback() method, but we must
-  // replace it to call the child class load_dir() method,
-  // or else icons won't update after double-clicking on a directory
-  virtual void double_click_callback() override
-  {
-    if (rowdata_.at(last_row_clicked_).isdir()) {
-      load_dir(last_clicked_item().c_str());
-      return;
-    }
-
-    selection_ = last_clicked_item();
-    window()->hide();
+  virtual void double_click_callback() override {
+    double_click_callback_(this);
   }
 
   bool set_icon(const char *filename, const char *data, EIcn idx)
@@ -623,7 +611,7 @@ public:
     }
 
     // clear custom icons
-    for (const auto e : icn_custom_) {
+    for (const auto &e : icn_custom_) {
       if (e.list) free(e.list);
       if (e.svg) delete e.svg;
     }

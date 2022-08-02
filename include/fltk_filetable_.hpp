@@ -645,15 +645,22 @@ protected:
     return ret;
   }
 
-  // set a callback to handle double-clicks on entries
-  virtual void double_click_callback()
+  // use member function as template to allow the usage of the
+  // subclasses's version of load_dir()
+  template<class T>
+  void double_click_callback_(T *t)
   {
     if (last_clicked_item_isdir()) {
-      load_dir(last_clicked_item().c_str());
+      t->load_dir(last_clicked_item().c_str());
     } else {
       selection_ = last_clicked_item();
       window()->hide();
     }
+  }
+
+  // set a callback to handle double-clicks on entries
+  virtual void double_click_callback() {
+    double_click_callback_(this);
   }
 
   // return pointer to icon set for row entry
