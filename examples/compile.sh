@@ -14,7 +14,6 @@ if [ ! -e ../build ]; then
     -DFLTK_BUILD_TEST=OFF \
     -DOPTION_CAIRO=ON \
     -DOPTION_OPTIM="-O3" \
-    -DOPTION_PRINT_SUPPORT=OFF \
     -DOPTION_USE_GL=OFF
   make -j4
   make install

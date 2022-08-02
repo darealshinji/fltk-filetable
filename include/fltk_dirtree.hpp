@@ -1,9 +1,5 @@
 /*
-  Copyright (c) 2021 djcj <djcj@gmx.de>
-
-  The icons used are
-  Copyright (c) 2007-2020 Haiku, Inc.
-
+  Copyright (c) 2021-2022 djcj <djcj@gmx.de>
   Permission is hereby granted, free of charge, to any person
   obtaining a copy of this software and associated documentation files
   (the "Software"), to deal in the Software without restriction,
@@ -463,7 +459,7 @@ protected:
 
     std::stable_sort(list.begin(), list.end(), sort(sort_mode(), sort_reverse()));
 
-    for (const auto e : list) {
+    for (const auto &e : list) {
       add(ti, e.name);
       auto sub = ti->child(ti->has_children() ? ti->children() - 1 : 0);
 

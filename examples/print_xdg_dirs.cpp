@@ -39,7 +39,7 @@ int main()
     return 1;
   }
 
-  printf("Found: %d/%d\n", rv, xdg::LAST);
+  printf("Found: %d of %d\n", rv, xdg::LAST);
   printf("Home: %s\n", paths.home());
 
   if (rv == 0) return 1;
