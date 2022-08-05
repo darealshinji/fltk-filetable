@@ -314,6 +314,15 @@ protected:
   Fl_SVG_Image *svg_link_ = NULL;
   Fl_SVG_Image *svg_noaccess_ = NULL;
 
+  void rows(size_t val) {
+    Fl_Table_Row::rows(val);
+  }
+
+  size_t rows() {
+    assert(Fl_Table::rows() >= 0);
+    return static_cast<size_t>(Fl_Table::rows());
+  }
+
   // create an overlay image, transitioning from the left being full
   // transparent to the right being full opaque
   Fl_RGB_Image *make_overlay_image(uchar r, uchar g, uchar b, int W, int H)
@@ -549,7 +558,7 @@ protected:
   void sort_column(int col)
   {
     // save current selection state in rowdata_
-    for (int i = 0; i < rows(); ++i) {
+    for (size_t i = 0; i < rows(); ++i) {
       rowdata_.at(i).selected = row_selected(i) ? true : false;
     }
 
@@ -557,7 +566,7 @@ protected:
     std::stable_sort(rowdata_.begin(), rowdata_.end(), sort(col, sort_reverse_, sort_mode()));
 
     // update table row selection from rowdata_
-    for (int i = 0; i < rows(); ++i) {
+    for (size_t i = 0; i < rows(); ++i) {
       select_row(i, rowdata_.at(i).selected);
     }
 

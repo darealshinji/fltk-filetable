@@ -314,7 +314,7 @@ private:
   // multi-threading: update icons "on the fly"
   void update_icons()
   {
-    for (int i=0; i < rows(); ++i) {
+    for (size_t i=0; i < rows(); ++i) {
       // stop immediately
       if (request_stop_) {
         Fl::unlock();
