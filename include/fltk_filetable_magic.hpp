@@ -53,6 +53,9 @@ class filetable_magic : public filetable_
 {
 private:
 
+  // hardcoded number of threads used to get magic bytes from files
+  enum { THREADS = 3 };
+
 #if DLOPEN_MAGIC != 0
   enum {
     MAGIC_SYMLINK = 0x0000002,
@@ -99,8 +102,8 @@ private:
 
   svg_t icn_[ICN_LAST] = {0};
   std::vector<ext_t> icn_custom_;
-  std::thread *th_ = NULL;
-  magic_t cookie_;
+  std::thread *th_[THREADS] = {0};
+  magic_t cookie_[THREADS] = {0};
   bool use_magic_ = false;
   bool show_mime_ = false;
   char *filter_mime_;
@@ -164,9 +167,10 @@ private:
     return icn_[ICN_FILE].svg;
   }
 
-  Fl_SVG_Image *icon_magic(Row_t &r) const
+  Fl_SVG_Image *icon_magic(Row_t &r, uint thread_num) const
   {
     const char *p;
+    const char *type = NULL;
 
     // don't check 0 byte files
     if (!use_magic_ || r.bytes == 0) {
@@ -174,16 +178,13 @@ private:
     }
 
     if (open_directory_.empty()) {
-      p = magic_file(cookie_, r.cols[COL_NAME]);
+      p = magic_file(cookie_[thread_num], r.cols[COL_NAME]);
     } else {
       std::string s = open_directory_ + "/" + r.cols[COL_NAME];
-      p = magic_file(cookie_, s.c_str());
+      p = magic_file(cookie_[thread_num], s.c_str());
     }
 
     if (!p) return icn_[ICN_FILE].svg;
-
-    const char *type = NULL;
-    const char *mime = p;
 
 #define STR_BEGINS(ptr,str)  (strncmp(ptr, str, sizeof(str)-1) == 0)
 
@@ -206,7 +207,7 @@ private:
           for (const auto &l : icn_custom_) {
             if (strstr(l.list, p) || strstr(l.list, s.c_str())) {
               if (show_mime()) {
-                r.cols[COL_TYPE] = strdup(mime);
+                r.cols[COL_TYPE] = strdup(p);
                 r.type = ENTRY_ALLOCATED;
               } else {
                 r.cols[COL_TYPE] = const_cast<char *>(l.desc);
@@ -262,7 +263,7 @@ private:
       default:
         // unsupported type or message like "regular file"
         if (show_mime()) {
-          r.cols[COL_TYPE] = strdup(mime);
+          r.cols[COL_TYPE] = strdup(p);
           r.type = ENTRY_ALLOCATED;
         }
         return icn_[ICN_FILE].svg;
@@ -280,7 +281,7 @@ private:
     for (const auto &l : icn_custom_) {
       if (strstr(l.list, s.c_str())) {
         if (show_mime()) {
-          r.cols[COL_TYPE] = strdup(mime);
+          r.cols[COL_TYPE] = strdup(p);
           r.type = ENTRY_ALLOCATED;
         } else {
           r.cols[COL_TYPE] = const_cast<char *>(l.desc);
@@ -294,7 +295,7 @@ private:
       for (const auto &l : icn_custom_) {
         if (strstr(l.list, type)) {
           if (show_mime()) {
-            r.cols[COL_TYPE] = strdup(mime);
+            r.cols[COL_TYPE] = strdup(p);
             r.type = ENTRY_ALLOCATED;
           } else {
             r.cols[COL_TYPE] = const_cast<char *>(l.desc);
@@ -305,16 +306,16 @@ private:
     }
 
     if (show_mime()) {
-      r.cols[COL_TYPE] = strdup(mime);
+      r.cols[COL_TYPE] = strdup(p);
       r.type = ENTRY_ALLOCATED;
     }
     return icn_[ICN_FILE].svg;
   }
 
   // multi-threading: update icons "on the fly"
-  void update_icons()
+  void update_icons(uint thread_num)
   {
-    for (size_t i=0; i < rows(); ++i) {
+    for (size_t i=thread_num; i < rows(); i += THREADS) {
       // stop immediately
       if (request_stop_) {
         Fl::unlock();
@@ -323,7 +324,7 @@ private:
       }
 
       if (rowdata_.at(i).type == 'R' || (show_mime() && rowdata_.at(i).type != 'D')) {
-        rowdata_.at(i).svg = icon_magic(rowdata_.at(i));
+        rowdata_.at(i).svg = icon_magic(rowdata_.at(i), thread_num);
         redraw_range(i, i, COL_NAME, COL_NAME);
         parent()->redraw();
         Fl::awake();
@@ -338,13 +339,18 @@ private:
     */
   }
 
-  void stop_thread()
+  void stop_threads()
   {
-    if (!th_) return;
     request_stop_ = true;
-    if (th_->joinable()) th_->join();
-    delete th_;
-    th_ = NULL;
+
+    for (uint i=0; i < THREADS; i++) {
+      if (th_[i]) {
+        if (th_[i]->joinable()) th_[i]->join();
+        delete th_[i];
+        th_[i] = NULL;
+      }
+    }
+
     request_stop_ = false;
   }
 
@@ -366,14 +372,26 @@ public:
         | MAGIC_NO_CHECK_ELF
         | MAGIC_NO_CHECK_ENCODING;
 
-      cookie_ = magic_open(flags);
+      bool error = false;
 
-      if (!magic_error(cookie_)) {
-        if (magic_load(cookie_, NULL) != 0) {
-          magic_close(cookie_);
-        } else {
-          use_magic_ = true;
+      for (uint i=0; i < THREADS; i++) {
+        cookie_[i] = magic_open(flags);
+
+        if (magic_error(cookie_[i]) || magic_load(cookie_[i], NULL) != 0) {
+          error = true;
         }
+      }
+
+      if (error) {
+        for (uint i=0; i < THREADS; i++) {
+          magic_close(cookie_[i]);
+        }
+#if DLOPEN_MAGIC != 0
+        dlclose(handle_);
+        handle_ = NULL;
+#endif
+      } else {
+        use_magic_ = true;
       }
 #if DLOPEN_MAGIC != 0
     } else if (handle_) {
@@ -387,7 +405,7 @@ public:
   // d'tor
   virtual ~filetable_magic()
   {
-    stop_thread();
+    stop_threads();
 
     for (int i = 0; i < ICN_LAST; ++i) {
       if (icn_[i].alloc && icn_[i].svg) {
@@ -401,7 +419,9 @@ public:
     }
 
     if (use_magic_) {
-      magic_close(cookie_);
+      for (uint i=0; i < THREADS; i++) {
+        magic_close(cookie_[i]);
+      }
     }
 
 #if DLOPEN_MAGIC != 0
@@ -422,13 +442,15 @@ public:
       }
     }
 
-    stop_thread();
+    stop_threads();
 
     if (!filetable_::load_dir(dirname)) {
       return false;
     }
 
-    th_ = new std::thread([this](){ this->update_icons(); });
+    for (uint i=0; i < THREADS; i++) {
+      th_[i] = new std::thread([this, i](){ this->update_icons(i); });
+    }
 
     return true;
   }
