@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <assert.h>
 #include <errno.h>
 #include <dirent.h>
 #include <fcntl.h>
