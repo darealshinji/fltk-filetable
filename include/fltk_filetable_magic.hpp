@@ -22,12 +22,15 @@
   SOFTWARE.
 */
 
+/* This class depends on libmagic and the compiled binary needs to be linked
+ * with -lmagic
+ *
+ * Alternatively you may define DLOPEN_MAGIC during the build (-DDLOPEN_MAGIC=1)
+ * in which case libmagic will be loaded dynamically (requires linking with -ldl)
+ */
+
 #ifndef fltk_filetable_magic_hpp
 #define fltk_filetable_magic_hpp
-
-//#ifndef FLTK_EXPERIMENTAL
-//#error You need to define FLTK_EXPERIMENTAL
-//#else
 
 #include <FL/Fl.H>
 #include <FL/Fl_SVG_Image.H>
@@ -669,8 +672,6 @@ filetable_magic::sym_mgcld filetable_magic::magic_load = NULL;
 #endif
 
 } // namespace fltk
-
-//#endif  // FLTK_EXPERIMENTAL
 
 #endif  // fltk_filetable_magic_hpp
 
