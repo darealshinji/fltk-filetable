@@ -90,15 +90,8 @@ public:
     svg_noaccess_ = icn_[ICN_LOCK];
   }
 
-  virtual ~filetable_extension()
-  {
-    for (size_t i=0; i < (sizeof(icn_)/sizeof(*icn_)); ++i) {
-      if (icn_[i]) delete icn_[i];
-    }
-
-    for (const auto &e : icn_custom_) {
-      if (e.svg) delete e.svg;
-    }
+  virtual ~filetable_extension() {
+    clear_icons();
   }
 
   bool set_icon(const char *filename, const char *data, EIcn idx)
@@ -180,6 +173,24 @@ public:
     set_icon(NULL, default_icon_data(ICN_LINK), ICN_LINK);
     set_icon(NULL, default_icon_data(ICN_LOCK), ICN_LOCK);
 #endif
+  }
+
+  void clear_icons()
+  {
+    for (size_t i=0; i < (sizeof(icn_)/sizeof(*icn_)); ++i) {
+      if (icn_[i]) {
+        delete icn_[i];
+        icn_[i] = NULL;
+      }
+    }
+
+    for (const auto &e : icn_custom_) {
+      if (e.svg) {
+        delete e.svg;
+      }
+    }
+
+    icn_custom_.clear();
   }
 };
 

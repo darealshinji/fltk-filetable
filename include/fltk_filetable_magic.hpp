@@ -409,17 +409,7 @@ public:
   virtual ~filetable_magic()
   {
     stop_threads();
-
-    for (int i = 0; i < ICN_LAST; ++i) {
-      if (icn_[i].alloc && icn_[i].svg) {
-        delete icn_[i].svg;
-      }
-    }
-
-    for (const auto &e : icn_custom_) {
-      if (e.list) free(e.list);
-      if (e.svg) delete e.svg;
-    }
+    clear_icons();
 
     if (use_magic_) {
       for (uint i=0; i < THREADS; i++) {
@@ -635,15 +625,6 @@ public:
       set_icon(NULL, default_icon_data(e), e);
     }
 
-    // clear custom icons
-    for (const auto &e : icn_custom_) {
-      if (e.list) free(e.list);
-      if (e.svg) delete e.svg;
-    }
-
-    icn_custom_.clear();
-    icn_custom_.reserve(8);
-
     set_icon(NULL, FILE_TEXT_SVG_DATA, "Text", ";text;");
     set_icon(NULL, FILE_IMAGE_3_SVG_DATA, "Image", ";image;");
     set_icon(NULL, FILE_VIDEO_SVG_DATA, "Video", ";video;");
@@ -653,6 +634,24 @@ public:
     set_icon(NULL, APP_GENERIC_SVG_DATA, "Executable / shared library", ";application/x-sharedlib;application/x-executable;");
     set_icon(NULL, FILE_ARCHIVE_SVG_DATA, "Archive", archive_mime);
 #endif  // SVG_DATA_H
+  }
+
+  void clear_icons()
+  {
+    for (int i = 0; i < ICN_LAST; ++i) {
+      if (icn_[i].alloc && icn_[i].svg) {
+        delete icn_[i].svg;
+        icn_[i].svg = NULL;
+        icn_[i].alloc = false;
+      }
+    }
+
+    for (const auto &e : icn_custom_) {
+      if (e.list) free(e.list);
+      if (e.svg) delete e.svg;
+    }
+
+    icn_custom_.clear();
   }
 
   // show MIME type or custom description

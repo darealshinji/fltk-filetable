@@ -77,13 +77,8 @@ public:
   }
 
   // d'tor
-  virtual ~filetable_simple()
-  {
-    for (int i = 0; i < ICN_LAST; ++i) {
-      if (icn_[i].alloc && icn_[i].svg) {
-        delete icn_[i].svg;
-      }
-    }
+  virtual ~filetable_simple() {
+    clear_icons();
   }
 
   bool load_dir(const char *dirname)
@@ -143,6 +138,17 @@ public:
       set_icon(NULL, default_icon_data(e), e);
     }
 #endif
+  }
+
+  void clear_icons()
+  {
+    for (int i = 0; i < ICN_LAST; ++i) {
+      if (icn_[i].alloc && icn_[i].svg) {
+        delete icn_[i].svg;
+        icn_[i].svg = NULL;
+        icn_[i].alloc = false;
+      }
+    }
   }
 };
 
