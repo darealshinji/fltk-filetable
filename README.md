@@ -16,7 +16,7 @@ extensions (MS Windows style); Unix special files are recognized too
 fltk::filetable_magic
 -> file selection widget where the file icons are set based on the magic
 bytes (Linux style); Unix special files are recognized too; this widget
-uses multithreading and libmagic
+uses multithreading and libmagic (experimental)
 
 fltk::dirtree
 -> a directory tree based on the Fl_Tree class
@@ -52,8 +52,7 @@ Known issues or limitations:
 * auto-width doesn't work correctly on the fltk::filetable_ subclasses on
   startup, see the code in fltk::fileselection for a workaround
 
-* in past I've had issues with fltk::filetable_magic that were related to the
-  multithreading; these issues seem to be gone, but I can't 100% guarantee this
+* fltk::filetable_magic might crash, you must define `FLTK_EXPERIMENTAL` to use it
 
 * only SVG icons are supported
 

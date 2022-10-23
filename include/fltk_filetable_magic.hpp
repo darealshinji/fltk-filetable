@@ -32,6 +32,8 @@
 #ifndef fltk_filetable_magic_hpp
 #define fltk_filetable_magic_hpp
 
+#ifdef FLTK_EXPERIMENTAL
+
 #include <FL/Fl.H>
 #include <FL/Fl_SVG_Image.H>
 #include <string>
@@ -672,5 +674,6 @@ filetable_magic::sym_mgcld filetable_magic::magic_load = NULL;
 
 } // namespace fltk
 
+#endif  // FLTK_EXPERIMENTAL
 #endif  // fltk_filetable_magic_hpp
 
