@@ -25,7 +25,7 @@
 #include <FL/Fl.H>
 #include <FL/Fl_Double_Window.H>
 
-#define FLTK_EXPERIMENTAL
+//#define FLTK_EXPERIMENTAL
 #include "fltk_fileselection.hpp"
 
 
@@ -33,13 +33,12 @@ int main()
 {
   Fl_Double_Window win(800, 600, "Test");
 
-  fltk::fileselection<fltk::filetable_magic> sel(4, 4, win.w() - 8, win.h() - 8);
-  sel.set_dir("/usr/local");  // set directory but don't load it
+  fltk::fileselection<fltk::filetable_simple> sel(4, 4, win.w() - 8, win.h() - 8);
   sel.load_default_icons();
   //sel.use_iec(false);
   //sel.show_hidden(true);
   //sel.sort_mode(sel.sort_mode() | fltk::filetable_::SORT_DIRECTORY_AS_FILE);
-  sel.load_dir();
+  sel.load_dir("/usr/local");
 
   win.end();
   win.resizable(sel);

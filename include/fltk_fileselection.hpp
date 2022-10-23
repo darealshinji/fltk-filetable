@@ -639,12 +639,13 @@ private:
       b_devices->add(s.c_str(), 0, partition_cb, arg);
     }
 
-    if (!mounted) {
-      b_devices->clear_submenu(0);
-      b_devices->mode(0, FL_SUBMENU|FL_MENU_INACTIVE);
+    if (partitions_.size() > 0) {
+      if (!mounted) {
+        b_devices->clear_submenu(0);
+        b_devices->mode(0, FL_SUBMENU|FL_MENU_INACTIVE);
+      }
+      b_devices->activate();
     }
-
-    if (partitions_.size() > 0) b_devices->activate();
   }
 
   // load currently open directory in tree_
@@ -656,6 +657,7 @@ private:
     add_partitions();
 
     // a directory was set with set_dir()
+/*
     if (!load_dir_.empty()) {
       // will set open_directory_ on success
       bool rv = table_->load_dir(load_dir_.c_str());
@@ -667,6 +669,7 @@ private:
         return false;
       }
     }
+*/
 
     const char *dir = table_->open_directory();
     addr_->value(dir);
@@ -1180,6 +1183,7 @@ public:
   }
 
   // set directory without loading it; use refresh() to load it
+/*
   void set_dir(const char *dirname) {
     load_dir_.clear();
     if (!empty(dirname)) load_dir_ = dirname;
@@ -1188,6 +1192,7 @@ public:
   void set_dir(const std::string &dirname) {
     set_dir(dirname.c_str());
   }
+*/
 
   // calls load_dir() on table_ and tree_
   bool load_dir(const char *dirname, bool update_tree=true)
