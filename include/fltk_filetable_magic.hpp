@@ -32,7 +32,11 @@
 #ifndef fltk_filetable_magic_hpp
 #define fltk_filetable_magic_hpp
 
-#ifdef FLTK_EXPERIMENTAL
+#ifndef FLTK_EXPERIMENTAL
+
+#error You need to define FLTK_EXPERIMENTAL to use fltk::filetable_magic
+
+#else
 
 #include <FL/Fl.H>
 #include <FL/Fl_SVG_Image.H>

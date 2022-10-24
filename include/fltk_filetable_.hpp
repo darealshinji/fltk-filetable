@@ -1015,19 +1015,6 @@ public:
     return printf_alloc(filesize_label_[idx][use_iec_].c_str(), ld);
   }
 
-  // return size in IEC or SI format
-  std::string human_readable_filesize_iec(long bytes, bool force_iec)
-  {
-    bool b = use_iec();  // save
-    use_iec(force_iec);
-    char *size = human_readable_filesize(bytes);
-    use_iec(b);  // restore
-    std::string s = size;
-    free(size);
-    while (isspace(s.back())) s.pop_back();
-    return s;
-  }
-
   virtual bool load_dir() {
     return load_dir(".");
   }
@@ -1055,8 +1042,13 @@ public:
         if (new_dir.empty()) {
           // fall back to using realpath() if needed
           char *p = realpath(dirname, NULL);
-          new_dir = p ? p : dirname;
-          free(p);
+
+          if (p) {
+            new_dir = p;
+            free(p);
+          } else {
+            new_dir = dirname;
+          }
         }
       }
 

@@ -539,6 +539,19 @@ private:
     return devices;
   }
 
+  // return size in IEC or SI format
+  std::string human_readable_filesize_iec(long bytes, bool force_iec)
+  {
+    bool b = table_->use_iec();  // save
+    table_->use_iec(force_iec);
+    char *size = table_->human_readable_filesize(bytes);
+    table_->use_iec(b);  // restore
+    std::string s = size;
+    free(size);
+    while (isspace(s.back())) s.pop_back();
+    return s;
+  }
+
   // add partitions to menu
   void add_partitions()
   {
@@ -620,9 +633,9 @@ private:
       unmount.insert(0, "Unmount/");
 
       s += " [";
-      s += table_->human_readable_filesize_iec(e.size, false);
+      s += human_readable_filesize_iec(e.size, false);
       s += " \\/ ";
-      s += table_->human_readable_filesize_iec(e.size, true);
+      s += human_readable_filesize_iec(e.size, true);
       s += ']';
       //PRINT_DEBUG("devices -> %s\n", s.c_str());
 
