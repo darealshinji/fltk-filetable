@@ -591,7 +591,7 @@ private:
         need_update = true;
       } else {
         while ((dir = readdir(dp)) != NULL) {
-          if (dir->d_name) media.push_back(dir->d_name);
+          media.push_back(dir->d_name);
         }
 
         if (media.size() == mountedPartitions_.size()) {
